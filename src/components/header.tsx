@@ -6,6 +6,7 @@ import { Menu, Search, Bell } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -96,9 +97,11 @@ export default function Header({ onMenuToggle }: HeaderProps) {
             align="end"
             className="w-80 bg-zinc-900 border-zinc-800 text-zinc-100"
           >
-            <DropdownMenuLabel className="text-zinc-100">
-              Notifications
-            </DropdownMenuLabel>
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="text-zinc-100">
+                Notifications
+              </DropdownMenuLabel>
+            </DropdownMenuGroup>
             <DropdownMenuSeparator className="bg-zinc-800" />
             <DropdownMenuItem className="flex flex-col items-start gap-1 text-zinc-100 cursor-pointer">
               <span className="text-sm">New asset registered</span>
@@ -143,14 +146,16 @@ export default function Header({ onMenuToggle }: HeaderProps) {
             align="end"
             className="w-56 bg-zinc-900 border-zinc-800 text-zinc-100"
           >
-            <DropdownMenuLabel className="flex flex-col">
-              <span className="text-sm font-medium text-zinc-100">
-                System Admin
-              </span>
-              <span className="text-xs font-normal text-zinc-400">
-                admin@company.com
-              </span>
-            </DropdownMenuLabel>
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="flex flex-col">
+                <span className="text-sm font-medium text-zinc-100">
+                  System Admin
+                </span>
+                <span className="text-xs font-normal text-zinc-400">
+                  admin@company.com
+                </span>
+              </DropdownMenuLabel>
+            </DropdownMenuGroup>
             <DropdownMenuSeparator className="bg-zinc-800" />
             <DropdownMenuItem className="text-zinc-100 cursor-pointer">
               Profile
