@@ -12,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+
 
 interface HeaderProps {
   onMenuToggle: () => void;
@@ -130,11 +130,9 @@ export default function Header({ onMenuToggle }: HeaderProps) {
                 className="flex items-center gap-2 rounded-lg p-1.5 hover:bg-zinc-800 transition-colors"
                 aria-label="User menu"
               >
-                <Avatar className="h-8 w-8">
-                  <AvatarFallback className="bg-blue-600 text-sm font-semibold text-white">
-                    SA
-                  </AvatarFallback>
-                </Avatar>
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-semibold text-white select-none">
+                  SA
+                </div>
                 <span className="hidden text-sm font-medium text-zinc-100 lg:block">
                   System Admin
                 </span>
