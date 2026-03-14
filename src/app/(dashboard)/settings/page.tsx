@@ -1,11 +1,35 @@
 "use client";
 
 import { useState } from "react";
-
-type SettingsTab = "General" | "Notifications" | "Security" | "Integrations";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
+import { CheckCircle2 } from "lucide-react";
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<SettingsTab>("General");
   const [siteName, setSiteName] = useState("ITAM Platform");
   const [timezone, setTimezone] = useState("America/New_York");
   const [retention, setRetention] = useState("90");
@@ -13,174 +37,412 @@ export default function SettingsPage() {
   const [depMethod, setDepMethod] = useState("straight-line");
   const [autoTag, setAutoTag] = useState(true);
 
-  const tabs: SettingsTab[] = [
-    "General",
-    "Notifications",
-    "Security",
-    "Integrations",
-  ];
+  const [emailNotif, setEmailNotif] = useState(true);
+  const [licenseExpiry, setLicenseExpiry] = useState(true);
+  const [assetAssign, setAssetAssign] = useState(false);
+  const [weeklyDigest, setWeeklyDigest] = useState(true);
+
+  const [passwordMinLength, setPasswordMinLength] = useState("8");
+  const [sessionTimeout, setSessionTimeout] = useState("30");
+  const [twoFactor, setTwoFactor] = useState(false);
+
+  // Integration states
+  const [adConnected, setAdConnected] = useState(false);
+  const [jiraConnected, setJiraConnected] = useState(false);
+  const [slackConnected, setSlackConnected] = useState(true);
+
+  // Save confirmation
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [saveSection, setSaveSection] = useState("");
+
+  // Integration dialog
+  const [integrationOpen, setIntegrationOpen] = useState(false);
+  const [integrationName, setIntegrationName] = useState("");
+  const [integrationAction, setIntegrationAction] = useState<"connect" | "disconnect">("connect");
+
+  function handleSave(section: string) {
+    setSaveSection(section);
+    setSaveOpen(true);
+  }
+
+  function handleIntegrationToggle(name: string, currentlyConnected: boolean) {
+    setIntegrationName(name);
+    setIntegrationAction(currentlyConnected ? "disconnect" : "connect");
+    setIntegrationOpen(true);
+  }
+
+  function confirmIntegration() {
+    if (integrationName === "Active Directory") {
+      setAdConnected(integrationAction === "connect");
+    } else if (integrationName === "JIRA") {
+      setJiraConnected(integrationAction === "connect");
+    } else if (integrationName === "Slack") {
+      setSlackConnected(integrationAction === "connect");
+    }
+    setIntegrationOpen(false);
+  }
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">System Settings</h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <h1 className="text-2xl font-bold text-zinc-100">System Settings</h1>
+        <p className="mt-1 text-sm text-zinc-400">
           Configure platform settings
         </p>
       </div>
 
-      {/* Tab Navigation */}
-      <div className="flex gap-1 rounded-lg border border-gray-200 bg-gray-50 p-1 w-fit">
-        {tabs.map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
-              activeTab === tab
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
+      <Tabs defaultValue="general">
+        <TabsList className="bg-zinc-900 border border-zinc-800">
+          <TabsTrigger value="general" className="data-active:bg-zinc-800 data-active:text-zinc-100 text-zinc-400">
+            General
+          </TabsTrigger>
+          <TabsTrigger value="notifications" className="data-active:bg-zinc-800 data-active:text-zinc-100 text-zinc-400">
+            Notifications
+          </TabsTrigger>
+          <TabsTrigger value="security" className="data-active:bg-zinc-800 data-active:text-zinc-100 text-zinc-400">
+            Security
+          </TabsTrigger>
+          <TabsTrigger value="integrations" className="data-active:bg-zinc-800 data-active:text-zinc-100 text-zinc-400">
+            Integrations
+          </TabsTrigger>
+        </TabsList>
 
-      {/* General Tab Content */}
-      {activeTab === "General" && (
-        <div className="space-y-6">
-          {/* Platform Settings Card */}
-          <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-gray-900 mb-5">
-              Platform Settings
-            </h2>
-            <div className="space-y-5 max-w-lg">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Site Name
-                </label>
-                <input
-                  type="text"
-                  value={siteName}
-                  onChange={(e) => setSiteName(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:outline-none"
-                />
+        {/* General Tab */}
+        <TabsContent value="general">
+          <div className="space-y-6 pt-2">
+            <Card className="bg-zinc-900 border-zinc-800 p-6">
+              <h2 className="text-lg font-semibold text-zinc-100 mb-5">
+                Platform Settings
+              </h2>
+              <div className="space-y-5 max-w-lg">
+                <div className="space-y-2">
+                  <Label className="text-zinc-300">Site Name</Label>
+                  <Input
+                    value={siteName}
+                    onChange={(e) => setSiteName(e.target.value)}
+                    className="bg-zinc-800 border-zinc-700 text-zinc-100"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-zinc-300">Default Timezone</Label>
+                  <Select value={timezone} onValueChange={(val) => setTimezone(val as string)}>
+                    <SelectTrigger className="w-full bg-zinc-800 border-zinc-700 text-zinc-100">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-zinc-800 border-zinc-700">
+                      <SelectItem value="America/New_York">Eastern Time (US & Canada)</SelectItem>
+                      <SelectItem value="America/Chicago">Central Time (US & Canada)</SelectItem>
+                      <SelectItem value="America/Denver">Mountain Time (US & Canada)</SelectItem>
+                      <SelectItem value="America/Los_Angeles">Pacific Time (US & Canada)</SelectItem>
+                      <SelectItem value="UTC">UTC</SelectItem>
+                      <SelectItem value="Europe/London">London</SelectItem>
+                      <SelectItem value="Asia/Kolkata">India (IST)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-zinc-300">Data Retention</Label>
+                  <Select value={retention} onValueChange={(val) => setRetention(val as string)}>
+                    <SelectTrigger className="w-full bg-zinc-800 border-zinc-700 text-zinc-100">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-zinc-800 border-zinc-700">
+                      <SelectItem value="30">30 days</SelectItem>
+                      <SelectItem value="60">60 days</SelectItem>
+                      <SelectItem value="90">90 days</SelectItem>
+                      <SelectItem value="180">180 days</SelectItem>
+                      <SelectItem value="365">1 year</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Default Timezone
-                </label>
-                <select
-                  value={timezone}
-                  onChange={(e) => setTimezone(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:outline-none"
-                >
-                  <option value="America/New_York">Eastern Time (US &amp; Canada)</option>
-                  <option value="America/Chicago">Central Time (US &amp; Canada)</option>
-                  <option value="America/Denver">Mountain Time (US &amp; Canada)</option>
-                  <option value="America/Los_Angeles">Pacific Time (US &amp; Canada)</option>
-                  <option value="UTC">UTC</option>
-                  <option value="Europe/London">London</option>
-                  <option value="Asia/Kolkata">India (IST)</option>
-                </select>
+            </Card>
+
+            <Card className="bg-zinc-900 border-zinc-800 p-6">
+              <h2 className="text-lg font-semibold text-zinc-100 mb-5">
+                Asset Settings
+              </h2>
+              <div className="space-y-5 max-w-lg">
+                <div className="space-y-2">
+                  <Label className="text-zinc-300">Default Currency</Label>
+                  <Select value={currency} onValueChange={(val) => setCurrency(val as string)}>
+                    <SelectTrigger className="w-full bg-zinc-800 border-zinc-700 text-zinc-100">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-zinc-800 border-zinc-700">
+                      <SelectItem value="USD">USD ($)</SelectItem>
+                      <SelectItem value="EUR">EUR (&euro;)</SelectItem>
+                      <SelectItem value="GBP">GBP (&pound;)</SelectItem>
+                      <SelectItem value="INR">INR (&#8377;)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-zinc-300">Depreciation Method</Label>
+                  <Select value={depMethod} onValueChange={(val) => setDepMethod(val as string)}>
+                    <SelectTrigger className="w-full bg-zinc-800 border-zinc-700 text-zinc-100">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-zinc-800 border-zinc-700">
+                      <SelectItem value="straight-line">Straight Line</SelectItem>
+                      <SelectItem value="declining-balance">Declining Balance</SelectItem>
+                      <SelectItem value="sum-of-years">Sum of Years Digits</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-zinc-300">
+                      Auto-generate Asset Tags
+                    </p>
+                    <p className="text-xs text-zinc-500">
+                      Automatically assign asset tags on creation
+                    </p>
+                  </div>
+                  <Switch
+                    checked={autoTag}
+                    onCheckedChange={setAutoTag}
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Data Retention
-                </label>
-                <select
-                  value={retention}
-                  onChange={(e) => setRetention(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:outline-none"
-                >
-                  <option value="30">30 days</option>
-                  <option value="60">60 days</option>
-                  <option value="90">90 days</option>
-                  <option value="180">180 days</option>
-                  <option value="365">1 year</option>
-                </select>
-              </div>
+            </Card>
+
+            <div>
+              <Button onClick={() => handleSave("General")}>Save Changes</Button>
             </div>
           </div>
+        </TabsContent>
 
-          {/* Asset Settings Card */}
-          <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-gray-900 mb-5">
-              Asset Settings
-            </h2>
-            <div className="space-y-5 max-w-lg">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Default Currency
-                </label>
-                <select
-                  value={currency}
-                  onChange={(e) => setCurrency(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:outline-none"
-                >
-                  <option value="USD">USD ($)</option>
-                  <option value="EUR">EUR (&euro;)</option>
-                  <option value="GBP">GBP (&pound;)</option>
-                  <option value="INR">INR (&#8377;)</option>
-                </select>
+        {/* Notifications Tab */}
+        <TabsContent value="notifications">
+          <div className="pt-2">
+            <Card className="bg-zinc-900 border-zinc-800 p-6">
+              <h2 className="text-lg font-semibold text-zinc-100 mb-5">
+                Notification Preferences
+              </h2>
+              <div className="space-y-6 max-w-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-zinc-300">
+                      Email Notifications
+                    </p>
+                    <p className="text-xs text-zinc-500">
+                      Receive email alerts for important events
+                    </p>
+                  </div>
+                  <Switch checked={emailNotif} onCheckedChange={setEmailNotif} />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-zinc-300">
+                      License Expiry Alerts
+                    </p>
+                    <p className="text-xs text-zinc-500">
+                      Get notified before software licenses expire
+                    </p>
+                  </div>
+                  <Switch checked={licenseExpiry} onCheckedChange={setLicenseExpiry} />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-zinc-300">
+                      Asset Assignment Alerts
+                    </p>
+                    <p className="text-xs text-zinc-500">
+                      Notify when assets are assigned or unassigned
+                    </p>
+                  </div>
+                  <Switch checked={assetAssign} onCheckedChange={setAssetAssign} />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-zinc-300">
+                      Weekly Digest
+                    </p>
+                    <p className="text-xs text-zinc-500">
+                      Receive a weekly summary of system activity
+                    </p>
+                  </div>
+                  <Switch checked={weeklyDigest} onCheckedChange={setWeeklyDigest} />
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Depreciation Method
-                </label>
-                <select
-                  value={depMethod}
-                  onChange={(e) => setDepMethod(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:outline-none"
-                >
-                  <option value="straight-line">Straight Line</option>
-                  <option value="declining-balance">Declining Balance</option>
-                  <option value="sum-of-years">Sum of Years Digits</option>
-                </select>
+            </Card>
+            <div className="mt-6">
+              <Button onClick={() => handleSave("Notifications")}>Save Changes</Button>
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* Security Tab */}
+        <TabsContent value="security">
+          <div className="pt-2">
+            <Card className="bg-zinc-900 border-zinc-800 p-6">
+              <h2 className="text-lg font-semibold text-zinc-100 mb-5">
+                Security Settings
+              </h2>
+              <div className="space-y-5 max-w-lg">
+                <div className="space-y-2">
+                  <Label className="text-zinc-300">Minimum Password Length</Label>
+                  <Input
+                    type="number"
+                    min={6}
+                    max={32}
+                    value={passwordMinLength}
+                    onChange={(e) => setPasswordMinLength(e.target.value)}
+                    className="bg-zinc-800 border-zinc-700 text-zinc-100 w-32"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-zinc-300">Session Timeout</Label>
+                  <Select value={sessionTimeout} onValueChange={(val) => setSessionTimeout(val as string)}>
+                    <SelectTrigger className="w-full bg-zinc-800 border-zinc-700 text-zinc-100">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-zinc-800 border-zinc-700">
+                      <SelectItem value="15">15 minutes</SelectItem>
+                      <SelectItem value="30">30 minutes</SelectItem>
+                      <SelectItem value="60">1 hour</SelectItem>
+                      <SelectItem value="120">2 hours</SelectItem>
+                      <SelectItem value="480">8 hours</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-zinc-300">
+                      Two-Factor Authentication
+                    </p>
+                    <p className="text-xs text-zinc-500">
+                      Require 2FA for all user accounts
+                    </p>
+                  </div>
+                  <Switch checked={twoFactor} onCheckedChange={setTwoFactor} />
+                </div>
               </div>
+            </Card>
+            <div className="mt-6">
+              <Button onClick={() => handleSave("Security")}>Save Changes</Button>
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* Integrations Tab */}
+        <TabsContent value="integrations">
+          <div className="pt-2 space-y-4">
+            <Card className="bg-zinc-900 border-zinc-800 p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-700">
-                    Auto-generate Asset Tags
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    Automatically assign asset tags on creation
+                  <h3 className="text-base font-semibold text-zinc-100">
+                    Active Directory
+                  </h3>
+                  <p className="text-sm text-zinc-400 mt-1">
+                    Sync users and groups from Active Directory / LDAP
                   </p>
                 </div>
-                <button
-                  onClick={() => setAutoTag(!autoTag)}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    autoTag ? "bg-blue-600" : "bg-gray-300"
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      autoTag ? "translate-x-6" : "translate-x-1"
-                    }`}
-                  />
-                </button>
+                {adConnected ? (
+                  <Button variant="outline" className="border-green-600 text-green-400 hover:bg-green-950" onClick={() => handleIntegrationToggle("Active Directory", true)}>
+                    Disconnect
+                  </Button>
+                ) : (
+                  <Button variant="outline" className="border-zinc-700 text-zinc-300 hover:bg-zinc-800" onClick={() => handleIntegrationToggle("Active Directory", false)}>
+                    Connect
+                  </Button>
+                )}
               </div>
+            </Card>
+            <Card className="bg-zinc-900 border-zinc-800 p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-semibold text-zinc-100">
+                    JIRA
+                  </h3>
+                  <p className="text-sm text-zinc-400 mt-1">
+                    Link IT asset tickets with JIRA issues
+                  </p>
+                </div>
+                {jiraConnected ? (
+                  <Button variant="outline" className="border-green-600 text-green-400 hover:bg-green-950" onClick={() => handleIntegrationToggle("JIRA", true)}>
+                    Disconnect
+                  </Button>
+                ) : (
+                  <Button variant="outline" className="border-zinc-700 text-zinc-300 hover:bg-zinc-800" onClick={() => handleIntegrationToggle("JIRA", false)}>
+                    Connect
+                  </Button>
+                )}
+              </div>
+            </Card>
+            <Card className="bg-zinc-900 border-zinc-800 p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-semibold text-zinc-100">
+                    Slack
+                  </h3>
+                  <p className="text-sm text-zinc-400 mt-1">
+                    Send notifications and alerts to Slack channels
+                  </p>
+                </div>
+                {slackConnected ? (
+                  <Button variant="outline" className="border-green-600 text-green-400 hover:bg-green-950" onClick={() => handleIntegrationToggle("Slack", true)}>
+                    Disconnect
+                  </Button>
+                ) : (
+                  <Button variant="outline" className="border-zinc-700 text-zinc-300 hover:bg-zinc-800" onClick={() => handleIntegrationToggle("Slack", false)}>
+                    Connect
+                  </Button>
+                )}
+              </div>
+            </Card>
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      {/* Save Confirmation Dialog */}
+      <Dialog open={saveOpen} onOpenChange={setSaveOpen}>
+        <DialogContent className="sm:max-w-sm bg-zinc-900 border-zinc-800">
+          <DialogHeader>
+            <DialogTitle className="text-zinc-100 flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-green-400" />
+              Settings Saved
+            </DialogTitle>
+            <DialogDescription>
+              {saveSection} settings have been saved successfully.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setSaveOpen(false)}>OK</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Integration Connect/Disconnect Dialog */}
+      <Dialog open={integrationOpen} onOpenChange={setIntegrationOpen}>
+        <DialogContent className="sm:max-w-md bg-zinc-900 border-zinc-800">
+          <DialogHeader>
+            <DialogTitle className="text-zinc-100">
+              {integrationAction === "connect" ? "Connect" : "Disconnect"} {integrationName}
+            </DialogTitle>
+            <DialogDescription>
+              {integrationAction === "connect"
+                ? `Are you sure you want to connect ${integrationName} to your ITAM platform?`
+                : `Are you sure you want to disconnect ${integrationName}? This will stop all data syncing.`}
+            </DialogDescription>
+          </DialogHeader>
+          {integrationAction === "disconnect" && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-300">
+              Disconnecting will stop all automated syncing and notifications through this integration.
             </div>
-          </div>
-
-          {/* Save Button */}
-          <div>
-            <button className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 transition-colors">
-              Save Changes
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Placeholder for other tabs */}
-      {activeTab !== "General" && (
-        <div className="rounded-xl border border-gray-200 bg-white p-12 text-center shadow-sm">
-          <p className="text-sm text-gray-400">
-            {activeTab} settings coming soon
-          </p>
-        </div>
-      )}
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIntegrationOpen(false)} className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">Cancel</Button>
+            {integrationAction === "connect" ? (
+              <Button onClick={confirmIntegration}>Connect</Button>
+            ) : (
+              <Button variant="destructive" onClick={confirmIntegration}>Disconnect</Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

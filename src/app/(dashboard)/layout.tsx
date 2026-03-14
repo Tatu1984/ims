@@ -14,7 +14,7 @@ export default function DashboardLayout({
   const toggleSidebar = () => setCollapsed((prev) => !prev);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-content-bg">
+    <div className="flex h-screen overflow-hidden bg-zinc-950">
       <Sidebar collapsed={collapsed} onToggle={toggleSidebar} />
       <div
         className="flex flex-1 flex-col overflow-hidden transition-all duration-300"
@@ -25,7 +25,9 @@ export default function DashboardLayout({
         }}
       >
         <Header onMenuToggle={toggleSidebar} />
-        <main className="flex-1 overflow-y-auto p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto bg-zinc-950 p-6">
+          {children}
+        </main>
       </div>
     </div>
   );

@@ -21,6 +21,14 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
 const statCards = [
   {
@@ -58,15 +66,15 @@ const statCards = [
 ];
 
 const iconBg: Record<string, string> = {
-  blue: "bg-blue-100 text-blue-600",
-  purple: "bg-purple-100 text-purple-600",
-  amber: "bg-amber-100 text-amber-600",
-  emerald: "bg-emerald-100 text-emerald-600",
+  blue: "bg-blue-500/10 text-blue-400",
+  purple: "bg-purple-500/10 text-purple-400",
+  amber: "bg-amber-500/10 text-amber-400",
+  emerald: "bg-emerald-500/10 text-emerald-400",
 };
 
 const trendColor: Record<string, string> = {
-  up: "text-green-600",
-  down: "text-amber-600",
+  up: "text-emerald-400",
+  down: "text-amber-400",
 };
 
 const pieData = [
@@ -86,12 +94,12 @@ const PIE_COLORS = [
 ];
 
 const barData = [
-  { month: "Oct", "Procured": 18, "Retired": 5 },
-  { month: "Nov", "Procured": 24, "Retired": 8 },
-  { month: "Dec", "Procured": 12, "Retired": 14 },
-  { month: "Jan", "Procured": 31, "Retired": 6 },
-  { month: "Feb", "Procured": 22, "Retired": 9 },
-  { month: "Mar", "Procured": 28, "Retired": 4 },
+  { month: "Oct", Procured: 18, Retired: 5 },
+  { month: "Nov", Procured: 24, Retired: 8 },
+  { month: "Dec", Procured: 12, Retired: 14 },
+  { month: "Jan", Procured: 31, Retired: 6 },
+  { month: "Feb", Procured: 22, Retired: 9 },
+  { month: "Mar", Procured: 28, Retired: 4 },
 ];
 
 const recentAssets = [
@@ -118,7 +126,7 @@ const recentAssets = [
   },
   {
     tag: "LPT-2026-0131",
-    name: "MacBook Pro 16\" M4 Pro",
+    name: 'MacBook Pro 16" M4 Pro',
     assignedTo: "Anika Singh",
     department: "Design",
     date: "Mar 10, 2026",
@@ -138,51 +146,46 @@ const expiringLicenses = [
     licenses: 150,
     expiry: "Apr 15, 2026",
     daysLeft: 32,
-    severity: "warning",
   },
   {
     software: "Adobe Creative Cloud",
     licenses: 25,
     expiry: "Mar 28, 2026",
     daysLeft: 14,
-    severity: "critical",
   },
   {
     software: "Slack Business+",
     licenses: 200,
     expiry: "Apr 30, 2026",
     daysLeft: 47,
-    severity: "info",
   },
   {
     software: "Zoom Workplace",
     licenses: 100,
     expiry: "Mar 22, 2026",
     daysLeft: 8,
-    severity: "critical",
   },
   {
     software: "AutoCAD LT",
     licenses: 10,
     expiry: "May 15, 2026",
     daysLeft: 62,
-    severity: "info",
   },
 ];
 
-const severityBadge: Record<string, string> = {
-  critical: "bg-red-100 text-red-700",
-  warning: "bg-amber-100 text-amber-700",
-  info: "bg-blue-100 text-blue-700",
-};
+function getDaysLeftBadgeClass(daysLeft: number): string {
+  if (daysLeft < 14) return "bg-red-500/10 text-red-400 border-red-500/20";
+  if (daysLeft < 30) return "bg-amber-500/10 text-amber-400 border-amber-500/20";
+  return "bg-blue-500/10 text-blue-400 border-blue-500/20";
+}
 
 export default function DashboardPage() {
   return (
-    <div className="space-y-6">
+    <div className="min-h-screen bg-zinc-950 space-y-6 p-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-sm text-gray-500 mt-1">
+        <h1 className="text-2xl font-bold text-zinc-100">Dashboard</h1>
+        <p className="text-sm text-zinc-400 mt-1">
           Overview of your hardware and software assets
         </p>
       </div>
@@ -192,144 +195,220 @@ export default function DashboardPage() {
         {statCards.map((card) => {
           const Icon = card.icon;
           return (
-            <div
+            <Card
               key={card.title}
-              className="bg-white rounded-xl shadow-sm border border-gray-200 p-6"
+              className="bg-zinc-900 border-zinc-800 ring-0"
             >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-500">
-                    {card.title}
-                  </p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">
-                    {card.value}
-                  </p>
+              <CardContent className="pt-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-zinc-400">
+                      {card.title}
+                    </p>
+                    <p className="text-2xl font-bold text-zinc-100 mt-1">
+                      {card.value}
+                    </p>
+                  </div>
+                  <div
+                    className={`p-3 rounded-full ${iconBg[card.color]}`}
+                  >
+                    <Icon className="w-6 h-6" />
+                  </div>
                 </div>
-                <div className={`p-3 rounded-lg ${iconBg[card.color]}`}>
-                  <Icon className="w-6 h-6" />
+                <div className="mt-4 flex items-center gap-1 text-sm">
+                  {card.trendDir === "up" ? (
+                    <ArrowUp className="w-4 h-4 text-emerald-400" />
+                  ) : (
+                    <ArrowDown className="w-4 h-4 text-amber-400" />
+                  )}
+                  <span className={trendColor[card.trendDir]}>
+                    {card.trend}
+                  </span>
                 </div>
-              </div>
-              <div className="mt-4 flex items-center gap-1 text-sm">
-                {card.trendDir === "up" ? (
-                  <ArrowUp className="w-4 h-4 text-green-600" />
-                ) : (
-                  <ArrowDown className="w-4 h-4 text-amber-600" />
-                )}
-                <span className={trendColor[card.trendDir]}>{card.trend}</span>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           );
         })}
       </div>
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Pie Chart - Asset Types */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
-            Hardware by Category
-          </h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={pieData}
-                cx="50%"
-                cy="50%"
-                innerRadius={60}
-                outerRadius={110}
-                paddingAngle={3}
-                dataKey="value"
-                label={({ name, percent }) =>
-                  `${name} ${((percent ?? 0) * 100).toFixed(0)}%`
-                }
-              >
-                {pieData.map((_, index) => (
-                  <Cell
-                    key={`cell-${index}`}
-                    fill={PIE_COLORS[index % PIE_COLORS.length]}
-                  />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
+        {/* Pie Chart - Hardware by Category */}
+        <Card className="bg-zinc-900 border-zinc-800 ring-0">
+          <CardHeader>
+            <CardTitle className="text-zinc-100">
+              Hardware by Category
+            </CardTitle>
+            <CardDescription className="text-zinc-400">
+              Distribution across asset types
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={pieData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={110}
+                  paddingAngle={3}
+                  dataKey="value"
+                  label={({ name, percent }) =>
+                    `${name} ${((percent ?? 0) * 100).toFixed(0)}%`
+                  }
+                  stroke="none"
+                >
+                  {pieData.map((_, index) => (
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={PIE_COLORS[index % PIE_COLORS.length]}
+                    />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "#18181b",
+                    border: "1px solid #27272a",
+                    borderRadius: "8px",
+                    color: "#e4e4e7",
+                  }}
+                  itemStyle={{ color: "#a1a1aa" }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
 
-        {/* Bar Chart - Procurement vs Retirement */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
-            Asset Lifecycle Trends
-          </h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={barData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="month" tick={{ fontSize: 13 }} />
-              <YAxis tick={{ fontSize: 13 }} />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="Procured" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="Retired" fill="#ef4444" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        {/* Bar Chart - Asset Lifecycle Trends */}
+        <Card className="bg-zinc-900 border-zinc-800 ring-0">
+          <CardHeader>
+            <CardTitle className="text-zinc-100">
+              Asset Lifecycle Trends
+            </CardTitle>
+            <CardDescription className="text-zinc-400">
+              Procured vs retired over the last 6 months
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={barData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                <XAxis
+                  dataKey="month"
+                  tick={{ fontSize: 13, fill: "#71717a" }}
+                  axisLine={{ stroke: "#27272a" }}
+                  tickLine={{ stroke: "#27272a" }}
+                />
+                <YAxis
+                  tick={{ fontSize: 13, fill: "#71717a" }}
+                  axisLine={{ stroke: "#27272a" }}
+                  tickLine={{ stroke: "#27272a" }}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "#18181b",
+                    border: "1px solid #27272a",
+                    borderRadius: "8px",
+                    color: "#e4e4e7",
+                  }}
+                  itemStyle={{ color: "#a1a1aa" }}
+                />
+                <Legend
+                  wrapperStyle={{ color: "#a1a1aa" }}
+                />
+                <Bar
+                  dataKey="Procured"
+                  fill="#3b82f6"
+                  radius={[4, 4, 0, 0]}
+                />
+                <Bar
+                  dataKey="Retired"
+                  fill="#ef4444"
+                  radius={[4, 4, 0, 0]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Bottom Panels */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recently Added Assets */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
-            Recently Added Hardware
-          </h2>
-          <div className="space-y-4">
-            {recentAssets.map((asset, i) => (
-              <div
-                key={i}
-                className="flex items-start gap-3 pb-4 border-b border-gray-100 last:border-0 last:pb-0"
-              >
-                <div className="p-2 rounded-lg bg-blue-50 shrink-0">
-                  <Monitor className="w-4 h-4 text-blue-600" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900">{asset.name}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    {asset.tag} &middot; {asset.assignedTo} &middot; {asset.department}
-                  </p>
-                </div>
-                <span className="text-xs text-gray-400 shrink-0">{asset.date}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Expiring Licenses */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
-            Upcoming License Expirations
-          </h2>
-          <div className="space-y-4">
-            {expiringLicenses.map((license, i) => (
-              <div
-                key={i}
-                className="flex items-start gap-3 pb-4 border-b border-gray-100 last:border-0 last:pb-0"
-              >
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900">
-                    {license.software}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    {license.licenses} licenses &middot; Expires {license.expiry}
-                  </p>
-                </div>
-                <span
-                  className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${severityBadge[license.severity]}`}
+        {/* Recently Added Hardware */}
+        <Card className="bg-zinc-900 border-zinc-800 ring-0">
+          <CardHeader>
+            <CardTitle className="text-zinc-100">
+              Recently Added Hardware
+            </CardTitle>
+            <CardDescription className="text-zinc-400">
+              Latest assets registered in the system
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {recentAssets.map((asset, i) => (
+                <div
+                  key={i}
+                  className="flex items-start gap-3 pb-4 border-b border-zinc-800 last:border-0 last:pb-0"
                 >
-                  {license.daysLeft} days
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
+                  <div className="p-2 rounded-lg bg-blue-500/10 shrink-0">
+                    <Monitor className="w-4 h-4 text-blue-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-zinc-100">
+                      {asset.name}
+                    </p>
+                    <p className="text-xs text-zinc-500 mt-0.5">
+                      {asset.tag} &middot; {asset.assignedTo} &middot;{" "}
+                      {asset.department}
+                    </p>
+                  </div>
+                  <span className="text-xs text-zinc-500 shrink-0">
+                    {asset.date}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Upcoming License Expirations */}
+        <Card className="bg-zinc-900 border-zinc-800 ring-0">
+          <CardHeader>
+            <CardTitle className="text-zinc-100">
+              Upcoming License Expirations
+            </CardTitle>
+            <CardDescription className="text-zinc-400">
+              Licenses requiring renewal attention
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {expiringLicenses.map((license, i) => (
+                <div
+                  key={i}
+                  className="flex items-start gap-3 pb-4 border-b border-zinc-800 last:border-0 last:pb-0"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-zinc-100">
+                      {license.software}
+                    </p>
+                    <p className="text-xs text-zinc-500 mt-0.5">
+                      {license.licenses} licenses &middot; Expires{" "}
+                      {license.expiry}
+                    </p>
+                  </div>
+                  <Badge
+                    className={`shrink-0 ${getDaysLeftBadgeClass(license.daysLeft)}`}
+                  >
+                    {license.daysLeft} days
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

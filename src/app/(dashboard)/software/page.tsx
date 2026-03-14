@@ -7,18 +7,47 @@ import {
   ShieldCheck,
   ShieldAlert,
   Clock,
-  ChevronLeft,
-  ChevronRight,
+  Plus,
+  MoreHorizontal,
 } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 
-const stats = [
-  { label: "Total Software", value: "342", icon: Package, color: "bg-blue-500" },
-  { label: "Licensed", value: "287", icon: ShieldCheck, color: "bg-green-500" },
-  { label: "Unauthorized", value: "12", icon: ShieldAlert, color: "bg-red-500" },
-  { label: "Expiring Soon", value: "8", icon: Clock, color: "bg-amber-500" },
-];
-
-type LicenseStatus = "Licensed" | "Unlicensed" | "Trial";
+type LicenseStatus = "Licensed" | "Unlicensed" | "Trial" | "Unauthorized";
 
 interface SoftwareItem {
   name: string;
@@ -29,7 +58,7 @@ interface SoftwareItem {
   category: string;
 }
 
-const softwareData: SoftwareItem[] = [
+const initialSoftwareData: SoftwareItem[] = [
   { name: "Microsoft Office 365", publisher: "Microsoft", version: "16.0.17328", installCount: 245, licenseStatus: "Licensed", category: "Productivity" },
   { name: "Adobe Creative Suite", publisher: "Adobe Inc.", version: "2024.1.0", installCount: 48, licenseStatus: "Licensed", category: "Design" },
   { name: "Google Chrome", publisher: "Google LLC", version: "122.0.6261", installCount: 312, licenseStatus: "Licensed", category: "Browser" },
@@ -42,129 +71,361 @@ const softwareData: SoftwareItem[] = [
   { name: "Norton 360", publisher: "Gen Digital", version: "22.24.1.12", installCount: 189, licenseStatus: "Licensed", category: "Security" },
 ];
 
-const statusBadge: Record<LicenseStatus, string> = {
-  Licensed: "bg-green-100 text-green-700",
-  Unlicensed: "bg-red-100 text-red-700",
-  Trial: "bg-amber-100 text-amber-700",
-};
+function statusBadgeClass(status: LicenseStatus) {
+  switch (status) {
+    case "Licensed":
+      return "bg-green-500/15 text-green-400 border-green-500/30";
+    case "Unlicensed":
+      return "bg-red-500/15 text-red-400 border-red-500/30";
+    case "Trial":
+      return "bg-amber-500/15 text-amber-400 border-amber-500/30";
+    case "Unauthorized":
+      return "bg-red-500/15 text-red-400 border-red-500/30";
+  }
+}
 
 export default function SoftwarePage() {
+  const [software, setSoftware] = useState<SoftwareItem[]>(initialSoftwareData);
   const [search, setSearch] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
-  const perPage = 5;
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [formData, setFormData] = useState({
+    name: "",
+    publisher: "",
+    version: "",
+    category: "",
+  });
 
-  const filtered = softwareData.filter(
+  // Detail dialog
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [selectedSw, setSelectedSw] = useState<SoftwareItem | null>(null);
+
+  // Manage License dialog
+  const [licenseOpen, setLicenseOpen] = useState(false);
+  const [licenseSwName, setLicenseSwName] = useState("");
+  const [newLicenseStatus, setNewLicenseStatus] = useState<LicenseStatus>("Licensed");
+
+  // Flag as Unauthorized confirm
+  const [flagOpen, setFlagOpen] = useState(false);
+  const [flagSwName, setFlagSwName] = useState("");
+
+  const filtered = software.filter(
     (s) =>
       s.name.toLowerCase().includes(search.toLowerCase()) ||
       s.publisher.toLowerCase().includes(search.toLowerCase()) ||
       s.category.toLowerCase().includes(search.toLowerCase())
   );
 
-  const totalPages = Math.ceil(filtered.length / perPage);
-  const paginated = filtered.slice((currentPage - 1) * perPage, currentPage * perPage);
+  const stats = [
+    { label: "Total Software", value: String(software.length), icon: Package, color: "bg-blue-500" },
+    { label: "Licensed", value: String(software.filter((s) => s.licenseStatus === "Licensed").length), icon: ShieldCheck, color: "bg-green-500" },
+    { label: "Unauthorized", value: String(software.filter((s) => s.licenseStatus === "Unauthorized" || s.licenseStatus === "Unlicensed").length), icon: ShieldAlert, color: "bg-red-500" },
+    { label: "Trial", value: String(software.filter((s) => s.licenseStatus === "Trial").length), icon: Clock, color: "bg-amber-500" },
+  ];
+
+  function handleSubmit() {
+    if (!formData.name.trim()) return;
+    const newSw: SoftwareItem = {
+      name: formData.name.trim(),
+      publisher: formData.publisher.trim() || "Unknown",
+      version: formData.version.trim() || "1.0.0",
+      installCount: 1,
+      licenseStatus: "Unlicensed",
+      category: formData.category.trim() || "Other",
+    };
+    setSoftware((prev) => [...prev, newSw]);
+    setDialogOpen(false);
+    setFormData({ name: "", publisher: "", version: "", category: "" });
+  }
+
+  function handleViewDetails(sw: SoftwareItem) {
+    setSelectedSw(sw);
+    setDetailOpen(true);
+  }
+
+  function handleManageLicense(sw: SoftwareItem) {
+    setLicenseSwName(sw.name);
+    setNewLicenseStatus(sw.licenseStatus);
+    setLicenseOpen(true);
+  }
+
+  function handleSaveLicense() {
+    setSoftware((prev) =>
+      prev.map((s) => (s.name === licenseSwName ? { ...s, licenseStatus: newLicenseStatus } : s))
+    );
+    setLicenseOpen(false);
+  }
+
+  function handleFlagUnauthorized(sw: SoftwareItem) {
+    setFlagSwName(sw.name);
+    setFlagOpen(true);
+  }
+
+  function confirmFlag() {
+    setSoftware((prev) =>
+      prev.map((s) => (s.name === flagSwName ? { ...s, licenseStatus: "Unauthorized" as LicenseStatus } : s))
+    );
+    setFlagOpen(false);
+  }
 
   return (
-    <div className="space-y-6">
+    <div className="min-h-screen bg-zinc-950 space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">Software Inventory</h1>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">Track installed software across all devices</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-zinc-50">Software Inventory</h1>
+          <p className="text-sm text-zinc-400">Track installed software across all devices</p>
+        </div>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogTrigger
+            render={
+              <Button className="gap-2">
+                <Plus className="h-4 w-4" />
+                Add Software
+              </Button>
+            }
+          />
+          <DialogContent className="sm:max-w-md bg-zinc-900 border-zinc-800">
+            <DialogHeader>
+              <DialogTitle className="text-zinc-50">Add New Software</DialogTitle>
+              <DialogDescription>Enter software details to add to the inventory.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label className="text-zinc-300">Software Name</Label>
+                <Input
+                  placeholder="e.g. Microsoft Office 365"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-zinc-300">Publisher</Label>
+                <Input
+                  placeholder="e.g. Microsoft"
+                  value={formData.publisher}
+                  onChange={(e) => setFormData({ ...formData, publisher: e.target.value })}
+                  className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-zinc-300">Version</Label>
+                <Input
+                  placeholder="e.g. 16.0.17328"
+                  value={formData.version}
+                  onChange={(e) => setFormData({ ...formData, version: e.target.value })}
+                  className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-zinc-300">Category</Label>
+                <Input
+                  placeholder="e.g. Productivity"
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
+                />
+              </div>
+            </div>
+            <DialogFooter className="bg-zinc-900 border-zinc-800">
+              <Button variant="outline" onClick={() => setDialogOpen(false)} className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">
+                Cancel
+              </Button>
+              <Button onClick={handleSubmit}>Add Software</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
-          <div key={stat.label} className="flex items-center gap-4 rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-            <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${stat.color} text-white`}>
-              <stat.icon className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-sm text-zinc-500 dark:text-zinc-400">{stat.label}</p>
-              <p className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">{stat.value}</p>
-            </div>
-          </div>
+          <Card key={stat.label} className="bg-zinc-900 border-zinc-800">
+            <CardContent className="flex items-center gap-4 p-5">
+              <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${stat.color} text-white`}>
+                <stat.icon className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-sm text-zinc-400">{stat.label}</p>
+                <p className="text-2xl font-semibold text-zinc-50">{stat.value}</p>
+              </div>
+            </CardContent>
+          </Card>
         ))}
       </div>
 
       {/* Search */}
       <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
-        <input
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+        <Input
           type="text"
           placeholder="Search software, publisher, or category..."
           value={search}
-          onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
-          className="w-full rounded-lg border border-zinc-200 bg-white py-2 pl-10 pr-4 text-sm text-zinc-900 placeholder:text-zinc-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+          onChange={(e) => setSearch(e.target.value)}
+          className="pl-10 bg-zinc-900 border-zinc-800 text-zinc-100 placeholder:text-zinc-500"
         />
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-zinc-200 dark:border-zinc-800">
-              <th className="px-4 py-3 text-left font-medium text-zinc-500 dark:text-zinc-400">Software Name</th>
-              <th className="px-4 py-3 text-left font-medium text-zinc-500 dark:text-zinc-400">Publisher</th>
-              <th className="px-4 py-3 text-left font-medium text-zinc-500 dark:text-zinc-400">Version</th>
-              <th className="px-4 py-3 text-right font-medium text-zinc-500 dark:text-zinc-400">Install Count</th>
-              <th className="px-4 py-3 text-left font-medium text-zinc-500 dark:text-zinc-400">License Status</th>
-              <th className="px-4 py-3 text-left font-medium text-zinc-500 dark:text-zinc-400">Category</th>
-            </tr>
-          </thead>
-          <tbody>
-            {paginated.map((sw) => (
-              <tr key={sw.name} className="border-b border-zinc-100 last:border-0 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/50">
-                <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-100">{sw.name}</td>
-                <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">{sw.publisher}</td>
-                <td className="px-4 py-3 font-mono text-zinc-600 dark:text-zinc-400">{sw.version}</td>
-                <td className="px-4 py-3 text-right text-zinc-600 dark:text-zinc-400">{sw.installCount}</td>
-                <td className="px-4 py-3">
-                  <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${statusBadge[sw.licenseStatus]}`}>
-                    {sw.licenseStatus}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">{sw.category}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <Card className="bg-zinc-900 border-zinc-800">
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow className="border-zinc-800 hover:bg-transparent">
+                <TableHead className="text-zinc-400">Software Name</TableHead>
+                <TableHead className="text-zinc-400">Publisher</TableHead>
+                <TableHead className="text-zinc-400">Version</TableHead>
+                <TableHead className="text-zinc-400 text-right">Install Count</TableHead>
+                <TableHead className="text-zinc-400">License Status</TableHead>
+                <TableHead className="text-zinc-400">Category</TableHead>
+                <TableHead className="text-zinc-400 w-10"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.map((sw) => (
+                <TableRow key={sw.name} className="border-zinc-800 hover:bg-zinc-800/50">
+                  <TableCell className="font-medium text-zinc-100">{sw.name}</TableCell>
+                  <TableCell className="text-zinc-400">{sw.publisher}</TableCell>
+                  <TableCell className="font-mono text-zinc-400">{sw.version}</TableCell>
+                  <TableCell className="text-right text-zinc-400">{sw.installCount}</TableCell>
+                  <TableCell>
+                    <Badge className={statusBadgeClass(sw.licenseStatus)}>
+                      {sw.licenseStatus}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-zinc-400">{sw.category}</TableCell>
+                  <TableCell>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        render={
+                          <Button variant="ghost" size="icon-sm" className="text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        }
+                      />
+                      <DropdownMenuContent align="end" className="bg-zinc-900 border-zinc-800">
+                        <DropdownMenuItem className="text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100" onClick={() => handleViewDetails(sw)}>
+                          View Details
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100" onClick={() => handleManageLicense(sw)}>
+                          Manage License
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator className="bg-zinc-800" />
+                        <DropdownMenuItem className="text-red-400 focus:bg-zinc-800 focus:text-red-400" onClick={() => handleFlagUnauthorized(sw)}>
+                          Flag as Unauthorized
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {filtered.length === 0 && (
+                <TableRow className="border-zinc-800">
+                  <TableCell colSpan={7} className="text-center text-zinc-500 py-8">
+                    No software found matching your search.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
 
-      {/* Pagination */}
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">
-          Showing {(currentPage - 1) * perPage + 1}-{Math.min(currentPage * perPage, filtered.length)} of {filtered.length} results
-        </p>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-            disabled={currentPage === 1}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          {Array.from({ length: totalPages }, (_, i) => (
-            <button
-              key={i + 1}
-              onClick={() => setCurrentPage(i + 1)}
-              className={`flex h-8 w-8 items-center justify-center rounded-lg text-sm font-medium ${
-                currentPage === i + 1
-                  ? "bg-blue-600 text-white"
-                  : "border border-zinc-200 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
-              }`}
-            >
-              {i + 1}
-            </button>
-          ))}
-          <button
-            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-            disabled={currentPage === totalPages}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
+      {/* View Details Dialog */}
+      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+        <DialogContent className="sm:max-w-md bg-zinc-900 border-zinc-800">
+          <DialogHeader>
+            <DialogTitle className="text-zinc-50">Software Details</DialogTitle>
+          </DialogHeader>
+          {selectedSw && (
+            <div className="space-y-3 py-2">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs text-zinc-500 uppercase">Name</p>
+                  <p className="text-sm text-zinc-100">{selectedSw.name}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-zinc-500 uppercase">Publisher</p>
+                  <p className="text-sm text-zinc-100">{selectedSw.publisher}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-zinc-500 uppercase">Version</p>
+                  <p className="text-sm font-mono text-zinc-100">{selectedSw.version}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-zinc-500 uppercase">Category</p>
+                  <p className="text-sm text-zinc-100">{selectedSw.category}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-zinc-500 uppercase">Install Count</p>
+                  <p className="text-sm text-zinc-100">{selectedSw.installCount} devices</p>
+                </div>
+                <div>
+                  <p className="text-xs text-zinc-500 uppercase">License Status</p>
+                  <Badge className={statusBadgeClass(selectedSw.licenseStatus)}>
+                    {selectedSw.licenseStatus}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter className="bg-zinc-900 border-zinc-800">
+            <Button onClick={() => setDetailOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Manage License Dialog */}
+      <Dialog open={licenseOpen} onOpenChange={setLicenseOpen}>
+        <DialogContent className="sm:max-w-md bg-zinc-900 border-zinc-800">
+          <DialogHeader>
+            <DialogTitle className="text-zinc-50">Manage License</DialogTitle>
+            <DialogDescription>Update the license status for {licenseSwName}.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label className="text-zinc-300">License Status</Label>
+              <Select value={newLicenseStatus} onValueChange={(val) => setNewLicenseStatus(val as LicenseStatus)}>
+                <SelectTrigger className="w-full bg-zinc-800 border-zinc-700 text-zinc-100">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-zinc-900 border-zinc-800">
+                  <SelectItem value="Licensed">Licensed</SelectItem>
+                  <SelectItem value="Unlicensed">Unlicensed</SelectItem>
+                  <SelectItem value="Trial">Trial</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter className="bg-zinc-900 border-zinc-800">
+            <Button variant="outline" onClick={() => setLicenseOpen(false)} className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">
+              Cancel
+            </Button>
+            <Button onClick={handleSaveLicense}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Flag as Unauthorized Confirmation */}
+      <Dialog open={flagOpen} onOpenChange={setFlagOpen}>
+        <DialogContent className="sm:max-w-md bg-zinc-900 border-zinc-800">
+          <DialogHeader>
+            <DialogTitle className="text-zinc-50">Flag as Unauthorized</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to flag <span className="font-medium text-zinc-200">{flagSwName}</span> as unauthorized software?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">
+            This will mark the software as unauthorized across all devices where it is installed.
+          </div>
+          <DialogFooter className="bg-zinc-900 border-zinc-800">
+            <Button variant="outline" onClick={() => setFlagOpen(false)} className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmFlag}>Flag as Unauthorized</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
