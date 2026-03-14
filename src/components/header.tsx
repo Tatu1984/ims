@@ -13,6 +13,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { useAuthStore } from "@/frontend/store/auth.store";
+import { useAuth } from "@/frontend/hooks/use-auth";
 
 
 interface HeaderProps {
@@ -45,6 +47,12 @@ function getPageTitle(pathname: string): string {
 export default function Header({ onMenuToggle }: HeaderProps) {
   const pathname = usePathname();
   const pageTitle = getPageTitle(pathname);
+  const { user } = useAuthStore();
+  const { logout } = useAuth();
+
+  const displayName = user?.name || "System Admin";
+  const displayEmail = user?.email || "admin@company.com";
+  const displayInitials = user?.initials || displayName.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
 
   return (
     <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-zinc-800 bg-zinc-900 px-4 lg:px-6">
@@ -134,10 +142,10 @@ export default function Header({ onMenuToggle }: HeaderProps) {
                 aria-label="User menu"
               >
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-semibold text-white select-none">
-                  SA
+                  {displayInitials}
                 </div>
                 <span className="hidden text-sm font-medium text-zinc-100 lg:block">
-                  System Admin
+                  {displayName}
                 </span>
               </button>
             }
@@ -149,10 +157,10 @@ export default function Header({ onMenuToggle }: HeaderProps) {
             <DropdownMenuGroup>
               <DropdownMenuLabel className="flex flex-col">
                 <span className="text-sm font-medium text-zinc-100">
-                  System Admin
+                  {displayName}
                 </span>
                 <span className="text-xs font-normal text-zinc-400">
-                  admin@company.com
+                  {displayEmail}
                 </span>
               </DropdownMenuLabel>
             </DropdownMenuGroup>
@@ -164,7 +172,10 @@ export default function Header({ onMenuToggle }: HeaderProps) {
               Settings
             </DropdownMenuItem>
             <DropdownMenuSeparator className="bg-zinc-800" />
-            <DropdownMenuItem className="text-zinc-100 cursor-pointer">
+            <DropdownMenuItem
+              render={<button type="button" onClick={logout} />}
+              className="text-zinc-100 cursor-pointer w-full text-left"
+            >
               Sign Out
             </DropdownMenuItem>
           </DropdownMenuContent>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   FileText,
   Shield,
@@ -52,6 +52,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  getReports,
+  createReport,
+  deleteReport,
+} from "@/frontend/api/endpoints/reports.api";
+import { useAuthStore } from "@/frontend/store/auth.store";
 
 interface ReportTemplate {
   title: string;
@@ -105,57 +111,20 @@ const reportTemplates: ReportTemplate[] = [
   },
 ];
 
-interface RecentReport {
+interface ApiReport {
+  id: string;
   name: string;
   type: string;
-  generatedBy: string;
-  date: string;
-  size: string;
   status: "Ready" | "Generating";
+  fileSize: string | null;
+  filePath: string | null;
+  createdAt: string;
+  generatedBy: {
+    id: string;
+    name: string;
+    initials: string;
+  };
 }
-
-const initialRecentReports: RecentReport[] = [
-  {
-    name: "Asset Inventory - Q1 2026",
-    type: "Inventory",
-    generatedBy: "John Smith",
-    date: "2026-03-14 10:30",
-    size: "2.4 MB",
-    status: "Ready",
-  },
-  {
-    name: "Security Audit - March 2026",
-    type: "Security",
-    generatedBy: "Sarah Kim",
-    date: "2026-03-14 09:15",
-    size: "\u2014",
-    status: "Generating",
-  },
-  {
-    name: "Patch Compliance Report",
-    type: "Compliance",
-    generatedBy: "Mike Chen",
-    date: "2026-03-13 16:45",
-    size: "1.8 MB",
-    status: "Ready",
-  },
-  {
-    name: "License Usage - Feb 2026",
-    type: "License",
-    generatedBy: "John Smith",
-    date: "2026-03-12 14:00",
-    size: "856 KB",
-    status: "Ready",
-  },
-  {
-    name: "Network Discovery Summary",
-    type: "Network",
-    generatedBy: "James Liu",
-    date: "2026-03-11 11:20",
-    size: "3.1 MB",
-    status: "Ready",
-  },
-];
 
 const typeBadgeColor: Record<string, string> = {
   Inventory: "bg-blue-500/15 text-blue-400 border-blue-500/30",
@@ -166,7 +135,11 @@ const typeBadgeColor: Record<string, string> = {
 };
 
 export default function ReportsPage() {
-  const [reports, setReports] = useState<RecentReport[]>(initialRecentReports);
+  const [reports, setReports] = useState<ApiReport[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
+
   const [dialogOpen, setDialogOpen] = useState(false);
   const [reportType, setReportType] = useState("Asset Inventory");
   const [dateFrom, setDateFrom] = useState("");
@@ -175,7 +148,7 @@ export default function ReportsPage() {
 
   // View report dialog
   const [viewOpen, setViewOpen] = useState(false);
-  const [viewReport, setViewReport] = useState<RecentReport | null>(null);
+  const [viewReport, setViewReport] = useState<ApiReport | null>(null);
 
   // Share dialog
   const [shareOpen, setShareOpen] = useState(false);
@@ -184,30 +157,61 @@ export default function ReportsPage() {
 
   // Delete dialog
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteReportId, setDeleteReportId] = useState<string | null>(null);
   const [deleteReportName, setDeleteReportName] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
-  function handleGenerate() {
-    const newReport: RecentReport = {
-      name: `${reportType} - ${new Date().toLocaleDateString("en-US", { month: "short", year: "numeric" })}`,
-      type: reportType.split(" ")[0],
-      generatedBy: "Current User",
-      date: new Date().toISOString().slice(0, 16).replace("T", " "),
-      size: "\u2014",
-      status: "Generating",
-    };
-    setReports((prev) => [newReport, ...prev]);
-    setDialogOpen(false);
+  const fetchReports = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await getReports() as { success: boolean; data: ApiReport[] };
+      if (res.success) {
+        setReports(res.data);
+      } else {
+        setError("Failed to load reports.");
+      }
+    } catch {
+      setError("Failed to load reports.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-    // Simulate report generation completing
-    setTimeout(() => {
-      setReports((prev) =>
-        prev.map((r) =>
-          r.name === newReport.name && r.status === "Generating"
-            ? { ...r, status: "Ready", size: "1.2 MB" }
-            : r
-        )
-      );
-    }, 3000);
+  useEffect(() => {
+    fetchReports();
+  }, [fetchReports]);
+
+  function formatDate(iso: string) {
+    const d = new Date(iso);
+    return d.toLocaleString("sv-SE", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
+  async function handleGenerate() {
+    const userId = useAuthStore.getState().user?.id;
+    if (!userId) return;
+
+    setGenerating(true);
+    try {
+      const name = `${reportType} - ${new Date().toLocaleDateString("en-US", { month: "short", year: "numeric" })}`;
+      await createReport({
+        name,
+        type: reportType.split(" ")[0],
+        generatedById: userId,
+      });
+      setDialogOpen(false);
+      await fetchReports();
+    } catch {
+      setError("Failed to generate report.");
+    } finally {
+      setGenerating(false);
+    }
   }
 
   function handleTemplateGenerate(templateTitle: string) {
@@ -215,12 +219,12 @@ export default function ReportsPage() {
     setDialogOpen(true);
   }
 
-  function handleViewReport(report: RecentReport) {
+  function handleViewReport(report: ApiReport) {
     setViewReport(report);
     setViewOpen(true);
   }
 
-  function handleShareReport(report: RecentReport) {
+  function handleShareReport(report: ApiReport) {
     setShareReportName(report.name);
     setShareEmail("");
     setShareOpen(true);
@@ -230,19 +234,34 @@ export default function ReportsPage() {
     setShareOpen(false);
   }
 
-  function handleDeleteReport(report: RecentReport) {
+  function handleDeleteReport(report: ApiReport) {
+    setDeleteReportId(report.id);
     setDeleteReportName(report.name);
     setDeleteOpen(true);
   }
 
-  function confirmDelete() {
-    setReports((prev) => prev.filter((r) => r.name !== deleteReportName));
-    setDeleteOpen(false);
+  async function confirmDelete() {
+    if (!deleteReportId) return;
+    setDeleting(true);
+    try {
+      await deleteReport(deleteReportId);
+      setDeleteOpen(false);
+      await fetchReports();
+    } catch {
+      setError("Failed to delete report.");
+    } finally {
+      setDeleting(false);
+    }
   }
 
-  function handleDownload(report: RecentReport) {
+  function handleDownload(report: ApiReport) {
     // Create a sample text file download
-    const blob = new Blob([`Report: ${report.name}\nType: ${report.type}\nGenerated: ${report.date}\nGenerated By: ${report.generatedBy}`], { type: "text/plain" });
+    const blob = new Blob(
+      [
+        `Report: ${report.name}\nType: ${report.type}\nGenerated: ${formatDate(report.createdAt)}\nGenerated By: ${report.generatedBy.name}`,
+      ],
+      { type: "text/plain" }
+    );
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -330,11 +349,24 @@ export default function ReportsPage() {
               <Button variant="outline" onClick={() => setDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleGenerate}>Generate</Button>
+              <Button onClick={handleGenerate} disabled={generating}>
+                {generating && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+                Generate
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Error State */}
+      {error && (
+        <Card className="bg-red-500/10 border-red-500/30 p-4">
+          <p className="text-sm text-red-400">{error}</p>
+          <Button variant="outline" size="sm" className="mt-2" onClick={fetchReports}>
+            Retry
+          </Button>
+        </Card>
+      )}
 
       {/* Report Templates Grid */}
       <div>
@@ -396,85 +428,106 @@ export default function ReportsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {reports.map((report) => (
-              <TableRow
-                key={report.name}
-                className="border-zinc-800 hover:bg-zinc-800/50"
-              >
-                <TableCell className="font-medium text-zinc-200">
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-zinc-500" />
-                    {report.name}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Badge
-                    className={`text-[11px] border ${
-                      typeBadgeColor[report.type] ??
-                      "bg-zinc-500/15 text-zinc-400 border-zinc-500/30"
-                    }`}
-                  >
-                    {report.type}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-zinc-300">
-                  {report.generatedBy}
-                </TableCell>
-                <TableCell className="text-zinc-400">{report.date}</TableCell>
-                <TableCell className="text-zinc-400">{report.size}</TableCell>
-                <TableCell>
-                  {report.status === "Ready" ? (
-                    <Badge className="text-[11px] border bg-emerald-500/15 text-emerald-400 border-emerald-500/30">
-                      <CheckCircle2 className="h-3 w-3 mr-1" />
-                      Ready
-                    </Badge>
-                  ) : (
-                    <Badge className="text-[11px] border bg-amber-500/15 text-amber-400 border-amber-500/30">
-                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                      Generating
-                    </Badge>
-                  )}
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex items-center justify-end gap-1">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={report.status !== "Ready"}
-                      className="gap-1"
-                      onClick={() => handleDownload(report)}
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                      Download
-                    </Button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger
-                        render={
-                          <Button variant="ghost" size="icon-sm">
-                            <MoreHorizontal className="h-4 w-4 text-zinc-400" />
-                          </Button>
-                        }
-                      />
-                      <DropdownMenuContent
-                        align="end"
-                        className="bg-zinc-900 border-zinc-800"
-                      >
-                        <DropdownMenuItem className="text-zinc-300" onClick={() => handleViewReport(report)}>
-                          View
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="text-zinc-300" onClick={() => handleShareReport(report)}>
-                          Share
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator className="bg-zinc-800" />
-                        <DropdownMenuItem className="text-red-400" onClick={() => handleDeleteReport(report)}>
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+            {loading ? (
+              <TableRow className="border-zinc-800">
+                <TableCell colSpan={7} className="text-center py-8">
+                  <div className="flex items-center justify-center gap-2 text-zinc-400">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading reports...
                   </div>
                 </TableCell>
               </TableRow>
-            ))}
+            ) : reports.length === 0 ? (
+              <TableRow className="border-zinc-800">
+                <TableCell colSpan={7} className="text-center text-zinc-500 py-8">
+                  No reports found.
+                </TableCell>
+              </TableRow>
+            ) : (
+              reports.map((report) => (
+                <TableRow
+                  key={report.id}
+                  className="border-zinc-800 hover:bg-zinc-800/50"
+                >
+                  <TableCell className="font-medium text-zinc-200">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-zinc-500" />
+                      {report.name}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      className={`text-[11px] border ${
+                        typeBadgeColor[report.type] ??
+                        "bg-zinc-500/15 text-zinc-400 border-zinc-500/30"
+                      }`}
+                    >
+                      {report.type}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-zinc-300">
+                    {report.generatedBy.name}
+                  </TableCell>
+                  <TableCell className="text-zinc-400">
+                    {formatDate(report.createdAt)}
+                  </TableCell>
+                  <TableCell className="text-zinc-400">
+                    {report.fileSize || "\u2014"}
+                  </TableCell>
+                  <TableCell>
+                    {report.status === "Ready" ? (
+                      <Badge className="text-[11px] border bg-emerald-500/15 text-emerald-400 border-emerald-500/30">
+                        <CheckCircle2 className="h-3 w-3 mr-1" />
+                        Ready
+                      </Badge>
+                    ) : (
+                      <Badge className="text-[11px] border bg-amber-500/15 text-amber-400 border-amber-500/30">
+                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                        Generating
+                      </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={report.status !== "Ready"}
+                        className="gap-1"
+                        onClick={() => handleDownload(report)}
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        Download
+                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          render={
+                            <Button variant="ghost" size="icon-sm">
+                              <MoreHorizontal className="h-4 w-4 text-zinc-400" />
+                            </Button>
+                          }
+                        />
+                        <DropdownMenuContent
+                          align="end"
+                          className="bg-zinc-900 border-zinc-800"
+                        >
+                          <DropdownMenuItem className="text-zinc-300" onClick={() => handleViewReport(report)}>
+                            View
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="text-zinc-300" onClick={() => handleShareReport(report)}>
+                            Share
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator className="bg-zinc-800" />
+                          <DropdownMenuItem className="text-red-400" onClick={() => handleDeleteReport(report)}>
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </Card>
@@ -498,15 +551,15 @@ export default function ReportsPage() {
                 </div>
                 <div>
                   <p className="text-xs text-zinc-500 uppercase">Generated By</p>
-                  <p className="text-sm text-zinc-100">{viewReport.generatedBy}</p>
+                  <p className="text-sm text-zinc-100">{viewReport.generatedBy.name}</p>
                 </div>
                 <div>
                   <p className="text-xs text-zinc-500 uppercase">Date</p>
-                  <p className="text-sm text-zinc-100">{viewReport.date}</p>
+                  <p className="text-sm text-zinc-100">{formatDate(viewReport.createdAt)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-zinc-500 uppercase">Size</p>
-                  <p className="text-sm text-zinc-100">{viewReport.size}</p>
+                  <p className="text-sm text-zinc-100">{viewReport.fileSize || "\u2014"}</p>
                 </div>
                 <div>
                   <p className="text-xs text-zinc-500 uppercase">Status</p>
@@ -563,7 +616,10 @@ export default function ReportsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteOpen(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={confirmDelete}>Delete Report</Button>
+            <Button variant="destructive" onClick={confirmDelete} disabled={deleting}>
+              {deleting && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+              Delete Report
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

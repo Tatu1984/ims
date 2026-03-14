@@ -1,0 +1,211 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  Admin
+  Technician
+  Auditor
+  Manager
+}
+
+enum UserStatus {
+  Active
+  Inactive
+}
+
+enum AssetType {
+  desktop
+  laptop
+  server
+  printer
+  peripheral
+}
+
+enum AssetStatus {
+  Active
+  InStorage
+  Maintenance
+  Retired
+}
+
+enum LicenseStatusEnum {
+  Licensed
+  Unlicensed
+  Trial
+  Unauthorized
+}
+
+enum LicenseType {
+  Volume
+  PerSeat
+  Subscription
+  OEM
+}
+
+enum TicketPriority {
+  High
+  Medium
+  Low
+}
+
+enum TicketStatus {
+  Open
+  InProgress
+  Resolved
+  Closed
+}
+
+enum TicketSla {
+  OnTrack
+  AtRisk
+  Breached
+}
+
+enum AuditAction {
+  Create
+  Update
+  Delete
+  Login
+  Export
+}
+
+enum ReportStatus {
+  Ready
+  Generating
+}
+
+model User {
+  id           String     @id @default(cuid())
+  name         String
+  email        String     @unique
+  passwordHash String
+  role         UserRole   @default(Technician)
+  department   String     @default("General")
+  status       UserStatus @default(Active)
+  initials     String
+  lastLogin    DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  assets    Asset[]    @relation("AssignedAssets")
+  tickets   Ticket[]   @relation("AssignedTickets")
+  auditLogs AuditLog[]
+  reports   Report[]
+
+  @@map("users")
+}
+
+model Asset {
+  id             String      @id @default(cuid())
+  assetTag       String      @unique
+  name           String
+  type           AssetType
+  serialNumber   String
+  assignedTo     User?       @relation("AssignedAssets", fields: [assignedToId], references: [id])
+  assignedToId   String?
+  assignedToName String      @default("Unassigned")
+  status         AssetStatus @default(Active)
+  department     String      @default("General")
+  location       String?
+  purchaseDate   DateTime?
+  purchaseCost   Decimal?    @db.Decimal(10, 2)
+  warrantyExpiry DateTime?
+  notes          String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  tickets Ticket[] @relation("AssetTickets")
+
+  @@map("assets")
+}
+
+model Software {
+  id            String           @id @default(cuid())
+  name          String
+  publisher     String
+  version       String
+  category      String           @default("Other")
+  licenseStatus LicenseStatusEnum @default(Unlicensed)
+  installCount  Int              @default(0)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  licenses License[]
+
+  @@map("software")
+}
+
+model License {
+  id            String      @id @default(cuid())
+  software      Software    @relation(fields: [softwareId], references: [id], onDelete: Cascade)
+  softwareId    String
+  licenseType   LicenseType @default(Volume)
+  totalLicenses Int         @default(0)
+  inUse         Int         @default(0)
+  expiryDate    DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@map("licenses")
+}
+
+model Ticket {
+  id           String         @id @default(cuid())
+  ticketNumber String         @unique
+  title        String
+  description  String         @default("")
+  priority     TicketPriority @default(Medium)
+  status       TicketStatus   @default(Open)
+  sla          TicketSla      @default(OnTrack)
+  assignedTo   User?          @relation("AssignedTickets", fields: [assignedToId], references: [id])
+  assignedToId String?
+  asset        Asset?         @relation("AssetTickets", fields: [assetId], references: [id])
+  assetId      String?
+  device       String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@map("tickets")
+}
+
+model AuditLog {
+  id        String      @id @default(cuid())
+  user      User        @relation(fields: [userId], references: [id])
+  userId    String
+  action    AuditAction
+  resource  String
+  details   String      @default("")
+  ipAddress String      @default("")
+  createdAt DateTime    @default(now())
+
+  @@map("audit_logs")
+}
+
+model Report {
+  id           String       @id @default(cuid())
+  name         String
+  type         String
+  generatedBy  User         @relation(fields: [generatedById], references: [id])
+  generatedById String
+  status       ReportStatus @default(Generating)
+  fileSize     String?
+  filePath     String?
+  createdAt    DateTime     @default(now())
+
+  @@map("reports")
+}
+
+model Setting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  category  String   @default("general")
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}

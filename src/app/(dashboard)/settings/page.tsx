@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,9 +27,28 @@ import {
   TabsContent,
 } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Loader2 } from "lucide-react";
+import {
+  getSettings,
+  updateSetting,
+} from "@/frontend/api/endpoints/settings.api";
+
+interface SettingRecord {
+  id: string;
+  key: string;
+  value: string;
+  category: string;
+}
 
 export default function SettingsPage() {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Store original values to detect changes
+  const originalValues = useRef<Record<string, string>>({});
+
+  // General
   const [siteName, setSiteName] = useState("ITAM Platform");
   const [timezone, setTimezone] = useState("America/New_York");
   const [retention, setRetention] = useState("90");
@@ -37,16 +56,18 @@ export default function SettingsPage() {
   const [depMethod, setDepMethod] = useState("straight-line");
   const [autoTag, setAutoTag] = useState(true);
 
+  // Notifications
   const [emailNotif, setEmailNotif] = useState(true);
   const [licenseExpiry, setLicenseExpiry] = useState(true);
   const [assetAssign, setAssetAssign] = useState(false);
   const [weeklyDigest, setWeeklyDigest] = useState(true);
 
+  // Security
   const [passwordMinLength, setPasswordMinLength] = useState("8");
   const [sessionTimeout, setSessionTimeout] = useState("30");
   const [twoFactor, setTwoFactor] = useState(false);
 
-  // Integration states
+  // Integration states (client-only, no DB backing)
   const [adConnected, setAdConnected] = useState(false);
   const [jiraConnected, setJiraConnected] = useState(false);
   const [slackConnected, setSlackConnected] = useState(true);
@@ -60,9 +81,103 @@ export default function SettingsPage() {
   const [integrationName, setIntegrationName] = useState("");
   const [integrationAction, setIntegrationAction] = useState<"connect" | "disconnect">("connect");
 
-  function handleSave(section: string) {
-    setSaveSection(section);
-    setSaveOpen(true);
+  // Map of setting keys to state setters
+  const settingKeyMap: Record<string, (val: string) => void> = {
+    siteName: setSiteName,
+    timezone: setTimezone,
+    retention: setRetention,
+    currency: setCurrency,
+    depMethod: setDepMethod,
+    autoTag: (v) => setAutoTag(v === "true"),
+    emailNotif: (v) => setEmailNotif(v === "true"),
+    licenseExpiry: (v) => setLicenseExpiry(v === "true"),
+    assetAssign: (v) => setAssetAssign(v === "true"),
+    weeklyDigest: (v) => setWeeklyDigest(v === "true"),
+    passwordMinLength: setPasswordMinLength,
+    sessionTimeout: setSessionTimeout,
+    twoFactor: (v) => setTwoFactor(v === "true"),
+  };
+
+  const fetchSettings = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await getSettings() as { success: boolean; data: SettingRecord[] };
+      if (res.success) {
+        const settings: SettingRecord[] = res.data;
+        const vals: Record<string, string> = {};
+        for (const s of settings) {
+          vals[s.key] = s.value;
+          const setter = settingKeyMap[s.key];
+          if (setter) setter(s.value);
+        }
+        originalValues.current = vals;
+      } else {
+        setError("Failed to load settings.");
+      }
+    } catch {
+      setError("Failed to load settings.");
+    } finally {
+      setLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    fetchSettings();
+  }, [fetchSettings]);
+
+  // Get current values for a section
+  function getSectionSettings(section: string): Record<string, { value: string; category: string }> {
+    const map: Record<string, Record<string, { value: string; category: string }>> = {
+      General: {
+        siteName: { value: siteName, category: "general" },
+        timezone: { value: timezone, category: "general" },
+        retention: { value: retention, category: "general" },
+        currency: { value: currency, category: "general" },
+        depMethod: { value: depMethod, category: "general" },
+        autoTag: { value: String(autoTag), category: "general" },
+      },
+      Notifications: {
+        emailNotif: { value: String(emailNotif), category: "notifications" },
+        licenseExpiry: { value: String(licenseExpiry), category: "notifications" },
+        assetAssign: { value: String(assetAssign), category: "notifications" },
+        weeklyDigest: { value: String(weeklyDigest), category: "notifications" },
+      },
+      Security: {
+        passwordMinLength: { value: passwordMinLength, category: "security" },
+        sessionTimeout: { value: sessionTimeout, category: "security" },
+        twoFactor: { value: String(twoFactor), category: "security" },
+      },
+    };
+    return map[section] || {};
+  }
+
+  async function handleSave(section: string) {
+    setSaving(true);
+    setError(null);
+    try {
+      const settings = getSectionSettings(section);
+      const promises: Promise<unknown>[] = [];
+      for (const [key, { value, category }] of Object.entries(settings)) {
+        if (originalValues.current[key] !== value) {
+          promises.push(updateSetting(key, value, category));
+        }
+      }
+      if (promises.length > 0) {
+        await Promise.all(promises);
+        // Update original values after successful save
+        for (const [key, { value }] of Object.entries(settings)) {
+          originalValues.current[key] = value;
+        }
+      }
+      setSaveSection(section);
+      setSaveOpen(true);
+    } catch {
+      setError(`Failed to save ${section} settings.`);
+    } finally {
+      setSaving(false);
+    }
   }
 
   function handleIntegrationToggle(name: string, currentlyConnected: boolean) {
@@ -82,6 +197,23 @@ export default function SettingsPage() {
     setIntegrationOpen(false);
   }
 
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-zinc-100">System Settings</h1>
+          <p className="mt-1 text-sm text-zinc-400">Configure platform settings</p>
+        </div>
+        <div className="flex items-center justify-center py-12">
+          <div className="flex items-center gap-2 text-zinc-400">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            Loading settings...
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -91,6 +223,13 @@ export default function SettingsPage() {
           Configure platform settings
         </p>
       </div>
+
+      {/* Error State */}
+      {error && (
+        <Card className="bg-red-500/10 border-red-500/30 p-4">
+          <p className="text-sm text-red-400">{error}</p>
+        </Card>
+      )}
 
       <Tabs defaultValue="general">
         <TabsList className="bg-zinc-900 border border-zinc-800">
@@ -209,7 +348,10 @@ export default function SettingsPage() {
             </Card>
 
             <div>
-              <Button onClick={() => handleSave("General")}>Save Changes</Button>
+              <Button onClick={() => handleSave("General")} disabled={saving}>
+                {saving && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+                Save Changes
+              </Button>
             </div>
           </div>
         </TabsContent>
@@ -269,7 +411,10 @@ export default function SettingsPage() {
               </div>
             </Card>
             <div className="mt-6">
-              <Button onClick={() => handleSave("Notifications")}>Save Changes</Button>
+              <Button onClick={() => handleSave("Notifications")} disabled={saving}>
+                {saving && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+                Save Changes
+              </Button>
             </div>
           </div>
         </TabsContent>
@@ -322,7 +467,10 @@ export default function SettingsPage() {
               </div>
             </Card>
             <div className="mt-6">
-              <Button onClick={() => handleSave("Security")}>Save Changes</Button>
+              <Button onClick={() => handleSave("Security")} disabled={saving}>
+                {saving && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+                Save Changes
+              </Button>
             </div>
           </div>
         </TabsContent>

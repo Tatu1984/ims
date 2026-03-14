@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import Link from "next/link";
 import {
   Plus,
@@ -13,6 +13,7 @@ import {
   Pencil,
   TicketPlus,
   Archive,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,9 +52,16 @@ import {
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { useApi } from "@/frontend/hooks/use-api";
+import {
+  getAssets,
+  createAsset,
+  updateAsset,
+} from "@/frontend/api/endpoints/assets.api";
+import { createTicket } from "@/frontend/api/endpoints/tickets.api";
 
 type AssetType = "desktop" | "laptop" | "server" | "printer" | "peripheral";
-type AssetStatus = "Active" | "In Storage" | "Maintenance" | "Retired";
+type AssetStatus = "Active" | "InStorage" | "Maintenance" | "Retired";
 
 interface Asset {
   id: string;
@@ -61,7 +69,8 @@ interface Asset {
   name: string;
   type: AssetType;
   serialNumber: string;
-  assignedTo: string;
+  assignedToName: string;
+  assignedTo?: { id: string; name: string; initials: string } | null;
   status: AssetStatus;
   department: string;
   purchaseDate: string;
@@ -85,132 +94,66 @@ const typeBadgeClasses: Record<AssetType, string> = {
 
 const statusBadgeClasses: Record<AssetStatus, string> = {
   Active: "bg-green-500/15 text-green-400",
-  "In Storage": "bg-zinc-500/15 text-zinc-400",
+  InStorage: "bg-zinc-500/15 text-zinc-400",
   Maintenance: "bg-amber-500/15 text-amber-400",
   Retired: "bg-red-500/15 text-red-400",
 };
 
-const initialAssets: Asset[] = [
-  {
-    id: "ast-001",
-    assetTag: "LPT-2025-0451",
-    name: "Dell Latitude 7450",
-    type: "laptop",
-    serialNumber: "DL7450-XK9R2",
-    assignedTo: "James Thompson",
-    status: "Active",
-    department: "Engineering",
-    purchaseDate: "Jan 15, 2025",
-  },
-  {
-    id: "ast-002",
-    assetTag: "DSK-2024-0089",
-    name: "HP EliteDesk 800 G9",
-    type: "desktop",
-    serialNumber: "HP800G9-M3J7K",
-    assignedTo: "Priya Patel",
-    status: "Active",
-    department: "Finance",
-    purchaseDate: "Sep 3, 2024",
-  },
-  {
-    id: "ast-003",
-    assetTag: "SRV-2024-0012",
-    name: "Dell PowerEdge R760",
-    type: "server",
-    serialNumber: "DPR760-2NV8P",
-    assignedTo: "Server Room A",
-    status: "Active",
-    department: "Infrastructure",
-    purchaseDate: "Jun 20, 2024",
-  },
-  {
-    id: "ast-004",
-    assetTag: "LPT-2024-0523",
-    name: 'MacBook Pro 16" M4 Pro',
-    type: "laptop",
-    serialNumber: "MBP16-C9QF4R",
-    assignedTo: "Anika Singh",
-    status: "Active",
-    department: "Design",
-    purchaseDate: "Nov 8, 2024",
-  },
-  {
-    id: "ast-005",
-    assetTag: "PRN-2023-0034",
-    name: "HP LaserJet Pro M404dn",
-    type: "printer",
-    serialNumber: "HPLJ404-7K2X9",
-    assignedTo: "Floor 2 - Shared",
-    status: "Active",
-    department: "Shared Services",
-    purchaseDate: "Mar 12, 2023",
-  },
-  {
-    id: "ast-006",
-    assetTag: "DSK-2023-0167",
-    name: "Lenovo ThinkCentre M90q",
-    type: "desktop",
-    serialNumber: "LTC90Q-P5M2N",
-    assignedTo: "Mark Williams",
-    status: "Maintenance",
-    department: "Sales",
-    purchaseDate: "Jul 28, 2023",
-  },
-  {
-    id: "ast-007",
-    assetTag: "PRF-2025-0022",
-    name: "Dell UltraSharp U2723QE",
-    type: "peripheral",
-    serialNumber: "DU2723-K8R3V",
-    assignedTo: "James Thompson",
-    status: "Active",
-    department: "Engineering",
-    purchaseDate: "Jan 15, 2025",
-  },
-  {
-    id: "ast-008",
-    assetTag: "LPT-2022-0298",
-    name: "Dell Latitude 5530",
-    type: "laptop",
-    serialNumber: "DL5530-W4N6T",
-    assignedTo: "Unassigned",
-    status: "In Storage",
-    department: "IT Pool",
-    purchaseDate: "Apr 5, 2022",
-  },
-  {
-    id: "ast-009",
-    assetTag: "SRV-2023-0008",
-    name: "HPE ProLiant DL380 Gen10",
-    type: "server",
-    serialNumber: "HPE380-J2K9M",
-    assignedTo: "Server Room B",
-    status: "Retired",
-    department: "Infrastructure",
-    purchaseDate: "Feb 14, 2023",
-  },
-  {
-    id: "ast-010",
-    assetTag: "DSK-2025-0002",
-    name: "HP EliteOne 870 G9 AiO",
-    type: "desktop",
-    serialNumber: "HP870G9-R6V3Q",
-    assignedTo: "Sarah Chen",
-    status: "Active",
-    department: "HR",
-    purchaseDate: "Feb 1, 2025",
-  },
-];
+const statusDisplayLabels: Record<AssetStatus, string> = {
+  Active: "Active",
+  InStorage: "In Storage",
+  Maintenance: "Maintenance",
+  Retired: "Retired",
+};
 
 const ITEMS_PER_PAGE = 5;
 
+function formatDate(iso: string): string {
+  if (!iso) return "N/A";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 export default function AssetsPage() {
-  const [assets, setAssets] = useState<Asset[]>(initialAssets);
   const [activeFilter, setActiveFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // Build query params for server-side filtering/pagination
+  const buildParams = useCallback(() => {
+    const params: Record<string, string> = {
+      page: String(currentPage),
+      limit: String(ITEMS_PER_PAGE),
+    };
+    if (searchQuery.trim()) params.search = searchQuery.trim();
+    if (activeFilter !== "all") params.type = activeFilter;
+    return params;
+  }, [currentPage, searchQuery, activeFilter]);
+
+  // Fetch assets from API
+  const {
+    data: assetsData,
+    loading,
+    error,
+    refetch,
+  } = useApi<{ data: Asset[]; total: number }>(
+    () => getAssets(buildParams()),
+    [currentPage, searchQuery, activeFilter]
+  );
+
+  const assets = assetsData?.data ?? [];
+  const totalAssets = assetsData?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalAssets / ITEMS_PER_PAGE));
+  const safePage = Math.min(currentPage, totalPages);
+  const rangeStart = totalAssets === 0 ? 0 : (safePage - 1) * ITEMS_PER_PAGE + 1;
+  const rangeEnd = Math.min(safePage * ITEMS_PER_PAGE, totalAssets);
 
   // Add asset form state
   const [newName, setNewName] = useState("");
@@ -239,56 +182,31 @@ export default function AssetsPage() {
   const [exportOpen, setExportOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState("");
 
-  const filteredAssets = assets.filter((asset) => {
-    const matchesFilter = activeFilter === "all" || asset.type === activeFilter;
-    const q = searchQuery.toLowerCase();
-    const matchesSearch =
-      q === "" ||
-      asset.name.toLowerCase().includes(q) ||
-      asset.assetTag.toLowerCase().includes(q) ||
-      asset.serialNumber.toLowerCase().includes(q) ||
-      asset.assignedTo.toLowerCase().includes(q) ||
-      asset.department.toLowerCase().includes(q);
-    return matchesFilter && matchesSearch;
-  });
-
-  const totalPages = Math.max(1, Math.ceil(filteredAssets.length / ITEMS_PER_PAGE));
-  const safePage = Math.min(currentPage, totalPages);
-  const startIndex = (safePage - 1) * ITEMS_PER_PAGE;
-  const paginatedAssets = filteredAssets.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  const rangeStart = filteredAssets.length === 0 ? 0 : startIndex + 1;
-  const rangeEnd = Math.min(startIndex + ITEMS_PER_PAGE, filteredAssets.length);
-
-  function handleAddAsset() {
-    if (!newName.trim()) return;
-    const prefixMap: Record<AssetType, string> = {
-      desktop: "DSK",
-      laptop: "LPT",
-      server: "SRV",
-      printer: "PRN",
-      peripheral: "PRF",
-    };
-    const id = `ast-${String(assets.length + 1).padStart(3, "0")}`;
-    const tag = `${prefixMap[newType]}-2026-${String(assets.length + 1).padStart(4, "0")}`;
-    const newAsset: Asset = {
-      id,
-      assetTag: tag,
-      name: newName.trim(),
-      type: newType,
-      serialNumber: newSerial.trim() || "N/A",
-      assignedTo: newAssignedTo.trim() || "Unassigned",
-      status: "Active",
-      department: newDepartment.trim() || "General",
-      purchaseDate: newPurchaseDate || new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-    };
-    setAssets((prev) => [...prev, newAsset]);
-    setAddDialogOpen(false);
-    setNewName("");
-    setNewType("laptop");
-    setNewSerial("");
-    setNewAssignedTo("");
-    setNewDepartment("");
-    setNewPurchaseDate("");
+  async function handleAddAsset() {
+    if (!newName.trim() || saving) return;
+    setSaving(true);
+    try {
+      await createAsset({
+        name: newName.trim(),
+        type: newType,
+        serialNumber: newSerial.trim() || undefined,
+        assignedToName: newAssignedTo.trim() || undefined,
+        department: newDepartment.trim() || undefined,
+        purchaseDate: newPurchaseDate || undefined,
+      });
+      setAddDialogOpen(false);
+      setNewName("");
+      setNewType("laptop");
+      setNewSerial("");
+      setNewAssignedTo("");
+      setNewDepartment("");
+      setNewPurchaseDate("");
+      await refetch();
+    } catch {
+      // Error handling could be enhanced with toast notifications
+    } finally {
+      setSaving(false);
+    }
   }
 
   function handleExport(format: string) {
@@ -299,7 +217,7 @@ export default function AssetsPage() {
   function confirmExport() {
     // Generate CSV data
     const headers = ["Asset Tag", "Name", "Type", "Serial Number", "Assigned To", "Status", "Department", "Purchase Date"];
-    const rows = filteredAssets.map((a) => [a.assetTag, a.name, typeLabels[a.type], a.serialNumber, a.assignedTo, a.status, a.department, a.purchaseDate]);
+    const rows = assets.map((a) => [a.assetTag, a.name, typeLabels[a.type], a.serialNumber, a.assignedToName, statusDisplayLabels[a.status], a.department, formatDate(a.purchaseDate)]);
     const csv = [headers.join(","), ...rows.map((r) => r.map((c) => `"${c}"`).join(","))].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -311,35 +229,44 @@ export default function AssetsPage() {
     setExportOpen(false);
   }
 
-  function handleRetire(id: string) {
-    setAssets((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, status: "Retired" as AssetStatus } : a))
-    );
+  async function handleRetire(id: string) {
+    setSaving(true);
+    try {
+      await updateAsset(id, { status: "Retired" });
+      await refetch();
+    } catch {
+      // Error handling could be enhanced with toast notifications
+    } finally {
+      setSaving(false);
+    }
   }
 
   function handleEditAsset(asset: Asset) {
     setEditId(asset.id);
     setEditName(asset.name);
-    setEditAssignedTo(asset.assignedTo);
+    setEditAssignedTo(asset.assignedToName);
     setEditDepartment(asset.department);
     setEditStatus(asset.status);
     setEditOpen(true);
   }
 
-  function handleSaveEdit() {
-    setAssets((prev) =>
-      prev.map((a) => {
-        if (a.id !== editId) return a;
-        return {
-          ...a,
-          name: editName.trim() || a.name,
-          assignedTo: editAssignedTo.trim() || a.assignedTo,
-          department: editDepartment.trim() || a.department,
-          status: editStatus,
-        };
-      })
-    );
-    setEditOpen(false);
+  async function handleSaveEdit() {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await updateAsset(editId, {
+        name: editName.trim() || undefined,
+        assignedToName: editAssignedTo.trim() || undefined,
+        department: editDepartment.trim() || undefined,
+        status: editStatus,
+      });
+      setEditOpen(false);
+      await refetch();
+    } catch {
+      // Error handling could be enhanced with toast notifications
+    } finally {
+      setSaving(false);
+    }
   }
 
   function handleCreateTicket(asset: Asset) {
@@ -350,10 +277,23 @@ export default function AssetsPage() {
     setTicketOpen(true);
   }
 
-  function confirmCreateTicket() {
-    setTicketOpen(false);
-    setTicketTitle("");
-    setTicketDescription("");
+  async function confirmCreateTicket() {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await createTicket({
+        title: ticketTitle.trim(),
+        description: ticketDescription.trim(),
+        assetId: ticketAssetId,
+      });
+      setTicketOpen(false);
+      setTicketTitle("");
+      setTicketDescription("");
+    } catch {
+      // Error handling could be enhanced with toast notifications
+    } finally {
+      setSaving(false);
+    }
   }
 
   // Reset page when filter/search changes
@@ -473,7 +413,10 @@ export default function AssetsPage() {
                 <Button variant="outline" onClick={() => setAddDialogOpen(false)} className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">
                   Cancel
                 </Button>
-                <Button onClick={handleAddAsset}>Save Asset</Button>
+                <Button onClick={handleAddAsset} disabled={saving}>
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                  Save Asset
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -510,6 +453,16 @@ export default function AssetsPage() {
         />
       </div>
 
+      {/* Error State */}
+      {error && (
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
+          Failed to load assets: {error}
+          <Button variant="outline" size="sm" className="ml-3 border-red-500/30 text-red-300 hover:bg-red-500/10" onClick={() => refetch()}>
+            Retry
+          </Button>
+        </div>
+      )}
+
       {/* Data Table */}
       <div className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900">
         <Table>
@@ -527,81 +480,89 @@ export default function AssetsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {paginatedAssets.map((asset) => (
-              <TableRow
-                key={asset.id}
-                className="border-zinc-800 hover:bg-zinc-800/60 transition-colors"
-              >
-                <TableCell>
-                  <Link
-                    href={`/assets/${asset.id}`}
-                    className="text-sm font-medium text-blue-400 hover:text-blue-300 hover:underline"
-                  >
-                    {asset.assetTag}
-                  </Link>
-                </TableCell>
-                <TableCell className="text-sm font-medium text-zinc-100">
-                  {asset.name}
-                </TableCell>
-                <TableCell>
-                  <Badge variant="outline" className={typeBadgeClasses[asset.type]}>
-                    {typeLabels[asset.type]}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-sm font-mono text-zinc-400">
-                  {asset.serialNumber}
-                </TableCell>
-                <TableCell className="text-sm text-zinc-300">
-                  {asset.assignedTo}
-                </TableCell>
-                <TableCell>
-                  <Badge className={statusBadgeClasses[asset.status]}>
-                    {asset.status}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-sm text-zinc-300">
-                  {asset.department}
-                </TableCell>
-                <TableCell className="text-sm text-zinc-400">
-                  {asset.purchaseDate}
-                </TableCell>
-                <TableCell>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger render={<Button variant="ghost" size="icon-xs" className="text-zinc-400 hover:text-zinc-100" />}>
-                      <MoreHorizontal className="h-4 w-4" />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="bg-zinc-900 border-zinc-800">
-                      <DropdownMenuItem render={<Link href={`/assets/${asset.id}`} />}>
-                        <Eye className="h-4 w-4" />
-                        View Details
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleEditAsset(asset)}>
-                        <Pencil className="h-4 w-4" />
-                        Edit Asset
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleCreateTicket(asset)}>
-                        <TicketPlus className="h-4 w-4" />
-                        Create Ticket
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator className="bg-zinc-800" />
-                      <DropdownMenuItem
-                        variant="destructive"
-                        onClick={() => handleRetire(asset.id)}
-                      >
-                        <Archive className="h-4 w-4" />
-                        Retire Asset
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+            {loading ? (
+              <TableRow className="border-zinc-800">
+                <TableCell colSpan={9} className="text-center py-12">
+                  <Loader2 className="h-6 w-6 animate-spin text-zinc-500 mx-auto" />
+                  <p className="mt-2 text-sm text-zinc-500">Loading assets...</p>
                 </TableCell>
               </TableRow>
-            ))}
-            {paginatedAssets.length === 0 && (
+            ) : assets.length === 0 ? (
               <TableRow className="border-zinc-800">
                 <TableCell colSpan={9} className="text-center py-12 text-zinc-500">
                   No assets found matching your criteria.
                 </TableCell>
               </TableRow>
+            ) : (
+              assets.map((asset) => (
+                <TableRow
+                  key={asset.id}
+                  className="border-zinc-800 hover:bg-zinc-800/60 transition-colors"
+                >
+                  <TableCell>
+                    <Link
+                      href={`/assets/${asset.id}`}
+                      className="text-sm font-medium text-blue-400 hover:text-blue-300 hover:underline"
+                    >
+                      {asset.assetTag}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="text-sm font-medium text-zinc-100">
+                    {asset.name}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className={typeBadgeClasses[asset.type]}>
+                      {typeLabels[asset.type]}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-sm font-mono text-zinc-400">
+                    {asset.serialNumber}
+                  </TableCell>
+                  <TableCell className="text-sm text-zinc-300">
+                    {asset.assignedToName || "Unassigned"}
+                  </TableCell>
+                  <TableCell>
+                    <Badge className={statusBadgeClasses[asset.status]}>
+                      {statusDisplayLabels[asset.status]}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-sm text-zinc-300">
+                    {asset.department}
+                  </TableCell>
+                  <TableCell className="text-sm text-zinc-400">
+                    {formatDate(asset.purchaseDate)}
+                  </TableCell>
+                  <TableCell>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger render={<Button variant="ghost" size="icon-xs" className="text-zinc-400 hover:text-zinc-100" />}>
+                        <MoreHorizontal className="h-4 w-4" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="bg-zinc-900 border-zinc-800">
+                        <DropdownMenuItem render={<Link href={`/assets/${asset.id}`} />}>
+                          <Eye className="h-4 w-4" />
+                          View Details
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleEditAsset(asset)}>
+                          <Pencil className="h-4 w-4" />
+                          Edit Asset
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleCreateTicket(asset)}>
+                          <TicketPlus className="h-4 w-4" />
+                          Create Ticket
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator className="bg-zinc-800" />
+                        <DropdownMenuItem
+                          variant="destructive"
+                          onClick={() => handleRetire(asset.id)}
+                        >
+                          <Archive className="h-4 w-4" />
+                          Retire Asset
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))
             )}
           </TableBody>
         </Table>
@@ -610,7 +571,7 @@ export default function AssetsPage() {
         <div className="flex items-center justify-between border-t border-zinc-800 px-4 py-3">
           <p className="text-sm text-zinc-400">
             Showing <span className="font-medium text-zinc-200">{rangeStart}-{rangeEnd}</span> of{" "}
-            <span className="font-medium text-zinc-200">{filteredAssets.length}</span> assets
+            <span className="font-medium text-zinc-200">{totalAssets}</span> assets
           </p>
           <div className="flex items-center gap-1">
             <Button
@@ -680,7 +641,7 @@ export default function AssetsPage() {
                 </SelectTrigger>
                 <SelectContent className="bg-zinc-800 border-zinc-700">
                   <SelectItem value="Active">Active</SelectItem>
-                  <SelectItem value="In Storage">In Storage</SelectItem>
+                  <SelectItem value="InStorage">In Storage</SelectItem>
                   <SelectItem value="Maintenance">Maintenance</SelectItem>
                   <SelectItem value="Retired">Retired</SelectItem>
                 </SelectContent>
@@ -689,7 +650,10 @@ export default function AssetsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditOpen(false)} className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">Cancel</Button>
-            <Button onClick={handleSaveEdit}>Save Changes</Button>
+            <Button onClick={handleSaveEdit} disabled={saving}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+              Save Changes
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -725,7 +689,10 @@ export default function AssetsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setTicketOpen(false)} className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">Cancel</Button>
-            <Button onClick={confirmCreateTicket}>Create Ticket</Button>
+            <Button onClick={confirmCreateTicket} disabled={saving}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+              Create Ticket
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -736,7 +703,7 @@ export default function AssetsPage() {
           <DialogHeader>
             <DialogTitle className="text-zinc-100">Export Assets</DialogTitle>
             <DialogDescription className="text-zinc-400">
-              Export {filteredAssets.length} assets as {exportFormat}.
+              Export {totalAssets} assets as {exportFormat}.
             </DialogDescription>
           </DialogHeader>
           <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-3 text-sm text-blue-300">

@@ -20,17 +20,27 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { useAuth } from '@/frontend/hooks/use-auth';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const { login } = useAuth();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setTimeout(() => setLoading(false), 2000);
+    setError('');
+    try {
+      await login(email, password);
+    } catch (err: unknown) {
+      const apiErr = err as { message?: string };
+      setError(apiErr?.message || 'Invalid email or password');
+      setLoading(false);
+    }
   };
 
   return (
@@ -57,10 +67,7 @@ export default function LoginPage() {
       `}</style>
 
       <div className="relative min-h-screen flex items-center justify-center bg-zinc-950 px-4 overflow-hidden">
-        {/* Radial gradient overlay */}
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(59,130,246,0.08)_0%,_transparent_70%)]" />
-
-        {/* Animated background blobs */}
         <div className="pointer-events-none absolute top-1/4 -left-20 h-72 w-72 rounded-full bg-blue-600/10 blur-3xl blob-1" />
         <div className="pointer-events-none absolute -bottom-10 right-1/4 h-80 w-80 rounded-full bg-purple-600/10 blur-3xl blob-2" />
         <div className="pointer-events-none absolute top-1/3 right-10 h-64 w-64 rounded-full bg-indigo-500/8 blur-3xl blob-3" />
@@ -80,7 +87,12 @@ export default function LoginPage() {
 
           <CardContent className="pt-2">
             <form onSubmit={handleSubmit} className="space-y-5">
-              {/* Email */}
+              {error && (
+                <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
+                  {error}
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-zinc-300">
                   Email
@@ -99,7 +111,6 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              {/* Password */}
               <div className="space-y-2">
                 <Label htmlFor="password" className="text-zinc-300">
                   Password
@@ -130,7 +141,6 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              {/* Remember me & Forgot password */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Checkbox id="remember" />
@@ -149,7 +159,6 @@ export default function LoginPage() {
                 </a>
               </div>
 
-              {/* Sign In */}
               <Button
                 type="submit"
                 disabled={loading}
@@ -166,14 +175,12 @@ export default function LoginPage() {
               </Button>
             </form>
 
-            {/* Divider */}
             <div className="my-6 flex items-center gap-3">
               <div className="h-px flex-1 bg-zinc-800" />
               <span className="text-xs text-zinc-500">or continue with</span>
               <div className="h-px flex-1 bg-zinc-800" />
             </div>
 
-            {/* SSO */}
             <Button
               type="button"
               variant="outline"
@@ -182,7 +189,6 @@ export default function LoginPage() {
               Sign in with SSO
             </Button>
 
-            {/* Footer */}
             <p className="mt-8 text-center text-xs text-zinc-500">
               &copy; 2026 Infiniti Tech Partners
             </p>

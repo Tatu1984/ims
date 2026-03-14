@@ -9,6 +9,7 @@ import {
   Clock,
   Plus,
   MoreHorizontal,
+  Loader2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -46,30 +47,25 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { useApi } from "@/frontend/hooks/use-api";
+import {
+  getSoftware,
+  createSoftware,
+  updateSoftware,
+} from "@/frontend/api/endpoints/software.api";
 
 type LicenseStatus = "Licensed" | "Unlicensed" | "Trial" | "Unauthorized";
 
 interface SoftwareItem {
+  id: string;
   name: string;
   publisher: string;
   version: string;
   installCount: number;
   licenseStatus: LicenseStatus;
   category: string;
+  createdAt: string;
 }
-
-const initialSoftwareData: SoftwareItem[] = [
-  { name: "Microsoft Office 365", publisher: "Microsoft", version: "16.0.17328", installCount: 245, licenseStatus: "Licensed", category: "Productivity" },
-  { name: "Adobe Creative Suite", publisher: "Adobe Inc.", version: "2024.1.0", installCount: 48, licenseStatus: "Licensed", category: "Design" },
-  { name: "Google Chrome", publisher: "Google LLC", version: "122.0.6261", installCount: 312, licenseStatus: "Licensed", category: "Browser" },
-  { name: "Visual Studio Code", publisher: "Microsoft", version: "1.87.2", installCount: 87, licenseStatus: "Licensed", category: "Development" },
-  { name: "Slack", publisher: "Salesforce", version: "4.36.140", installCount: 198, licenseStatus: "Licensed", category: "Communication" },
-  { name: "Zoom Workplace", publisher: "Zoom Video", version: "5.17.11", installCount: 276, licenseStatus: "Licensed", category: "Communication" },
-  { name: "AutoCAD 2024", publisher: "Autodesk", version: "2024.1", installCount: 15, licenseStatus: "Trial", category: "Engineering" },
-  { name: "WinRAR", publisher: "win.rar GmbH", version: "7.0.0", installCount: 34, licenseStatus: "Unlicensed", category: "Utility" },
-  { name: "Postman", publisher: "Postman Inc.", version: "10.23.5", installCount: 42, licenseStatus: "Licensed", category: "Development" },
-  { name: "Norton 360", publisher: "Gen Digital", version: "22.24.1.12", installCount: 189, licenseStatus: "Licensed", category: "Security" },
-];
 
 function statusBadgeClass(status: LicenseStatus) {
   switch (status) {
@@ -85,9 +81,13 @@ function statusBadgeClass(status: LicenseStatus) {
 }
 
 export default function SoftwarePage() {
-  const [software, setSoftware] = useState<SoftwareItem[]>(initialSoftwareData);
+  const { data: software, loading, error, refetch } = useApi<SoftwareItem[]>(
+    () => getSoftware(),
+    []
+  );
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     publisher: "",
@@ -101,14 +101,18 @@ export default function SoftwarePage() {
 
   // Manage License dialog
   const [licenseOpen, setLicenseOpen] = useState(false);
+  const [licenseSwId, setLicenseSwId] = useState("");
   const [licenseSwName, setLicenseSwName] = useState("");
   const [newLicenseStatus, setNewLicenseStatus] = useState<LicenseStatus>("Licensed");
 
   // Flag as Unauthorized confirm
   const [flagOpen, setFlagOpen] = useState(false);
+  const [flagSwId, setFlagSwId] = useState("");
   const [flagSwName, setFlagSwName] = useState("");
 
-  const filtered = software.filter(
+  const items = software || [];
+
+  const filtered = items.filter(
     (s) =>
       s.name.toLowerCase().includes(search.toLowerCase()) ||
       s.publisher.toLowerCase().includes(search.toLowerCase()) ||
@@ -116,25 +120,30 @@ export default function SoftwarePage() {
   );
 
   const stats = [
-    { label: "Total Software", value: String(software.length), icon: Package, color: "bg-blue-500" },
-    { label: "Licensed", value: String(software.filter((s) => s.licenseStatus === "Licensed").length), icon: ShieldCheck, color: "bg-green-500" },
-    { label: "Unauthorized", value: String(software.filter((s) => s.licenseStatus === "Unauthorized" || s.licenseStatus === "Unlicensed").length), icon: ShieldAlert, color: "bg-red-500" },
-    { label: "Trial", value: String(software.filter((s) => s.licenseStatus === "Trial").length), icon: Clock, color: "bg-amber-500" },
+    { label: "Total Software", value: String(items.length), icon: Package, color: "bg-blue-500" },
+    { label: "Licensed", value: String(items.filter((s) => s.licenseStatus === "Licensed").length), icon: ShieldCheck, color: "bg-green-500" },
+    { label: "Unauthorized", value: String(items.filter((s) => s.licenseStatus === "Unauthorized" || s.licenseStatus === "Unlicensed").length), icon: ShieldAlert, color: "bg-red-500" },
+    { label: "Trial", value: String(items.filter((s) => s.licenseStatus === "Trial").length), icon: Clock, color: "bg-amber-500" },
   ];
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!formData.name.trim()) return;
-    const newSw: SoftwareItem = {
-      name: formData.name.trim(),
-      publisher: formData.publisher.trim() || "Unknown",
-      version: formData.version.trim() || "1.0.0",
-      installCount: 1,
-      licenseStatus: "Unlicensed",
-      category: formData.category.trim() || "Other",
-    };
-    setSoftware((prev) => [...prev, newSw]);
-    setDialogOpen(false);
-    setFormData({ name: "", publisher: "", version: "", category: "" });
+    setSubmitting(true);
+    try {
+      await createSoftware({
+        name: formData.name.trim(),
+        publisher: formData.publisher.trim() || "Unknown",
+        version: formData.version.trim() || "1.0.0",
+        category: formData.category.trim() || "Other",
+      });
+      setDialogOpen(false);
+      setFormData({ name: "", publisher: "", version: "", category: "" });
+      await refetch();
+    } catch {
+      // error is handled by useApi on refetch
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function handleViewDetails(sw: SoftwareItem) {
@@ -143,28 +152,63 @@ export default function SoftwarePage() {
   }
 
   function handleManageLicense(sw: SoftwareItem) {
+    setLicenseSwId(sw.id);
     setLicenseSwName(sw.name);
     setNewLicenseStatus(sw.licenseStatus);
     setLicenseOpen(true);
   }
 
-  function handleSaveLicense() {
-    setSoftware((prev) =>
-      prev.map((s) => (s.name === licenseSwName ? { ...s, licenseStatus: newLicenseStatus } : s))
-    );
-    setLicenseOpen(false);
+  async function handleSaveLicense() {
+    setSubmitting(true);
+    try {
+      await updateSoftware(licenseSwId, { licenseStatus: newLicenseStatus });
+      setLicenseOpen(false);
+      await refetch();
+    } catch {
+      // silent
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function handleFlagUnauthorized(sw: SoftwareItem) {
+    setFlagSwId(sw.id);
     setFlagSwName(sw.name);
     setFlagOpen(true);
   }
 
-  function confirmFlag() {
-    setSoftware((prev) =>
-      prev.map((s) => (s.name === flagSwName ? { ...s, licenseStatus: "Unauthorized" as LicenseStatus } : s))
+  async function confirmFlag() {
+    setSubmitting(true);
+    try {
+      await updateSoftware(flagSwId, { licenseStatus: "Unauthorized" });
+      setFlagOpen(false);
+      await refetch();
+    } catch {
+      // silent
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-zinc-400" />
+      </div>
     );
-    setFlagOpen(false);
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <p className="text-red-400">{error}</p>
+          <Button variant="outline" onClick={refetch} className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -231,7 +275,10 @@ export default function SoftwarePage() {
               <Button variant="outline" onClick={() => setDialogOpen(false)} className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">
                 Cancel
               </Button>
-              <Button onClick={handleSubmit}>Add Software</Button>
+              <Button onClick={handleSubmit} disabled={submitting}>
+                {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Add Software
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -283,7 +330,7 @@ export default function SoftwarePage() {
             </TableHeader>
             <TableBody>
               {filtered.map((sw) => (
-                <TableRow key={sw.name} className="border-zinc-800 hover:bg-zinc-800/50">
+                <TableRow key={sw.id} className="border-zinc-800 hover:bg-zinc-800/50">
                   <TableCell className="font-medium text-zinc-100">{sw.name}</TableCell>
                   <TableCell className="text-zinc-400">{sw.publisher}</TableCell>
                   <TableCell className="font-mono text-zinc-400">{sw.version}</TableCell>
@@ -401,7 +448,10 @@ export default function SoftwarePage() {
             <Button variant="outline" onClick={() => setLicenseOpen(false)} className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">
               Cancel
             </Button>
-            <Button onClick={handleSaveLicense}>Save</Button>
+            <Button onClick={handleSaveLicense} disabled={submitting}>
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Save
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -422,7 +472,10 @@ export default function SoftwarePage() {
             <Button variant="outline" onClick={() => setFlagOpen(false)} className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">
               Cancel
             </Button>
-            <Button variant="destructive" onClick={confirmFlag}>Flag as Unauthorized</Button>
+            <Button variant="destructive" onClick={confirmFlag} disabled={submitting}>
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Flag as Unauthorized
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

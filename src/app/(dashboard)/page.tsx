@@ -7,6 +7,7 @@ import {
   AlertTriangle,
   ArrowUp,
   ArrowDown,
+  RefreshCw,
 } from "lucide-react";
 import {
   PieChart,
@@ -29,41 +30,33 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { useApi } from "@/frontend/hooks/use-api";
+import { getDashboardData } from "@/frontend/api/endpoints/dashboard.api";
 
-const statCards = [
-  {
-    title: "Hardware Assets",
-    value: "847",
-    icon: Monitor,
-    color: "blue",
-    trend: "+8 this week",
-    trendDir: "up" as const,
-  },
-  {
-    title: "Software Titles",
-    value: "342",
-    icon: Package,
-    color: "purple",
-    trend: "+3 new detected",
-    trendDir: "up" as const,
-  },
-  {
-    title: "Active Licenses",
-    value: "287",
-    icon: KeyRound,
-    color: "emerald",
-    trend: "94% compliant",
-    trendDir: "up" as const,
-  },
-  {
-    title: "Expiring Soon",
-    value: "12",
-    icon: AlertTriangle,
-    color: "amber",
-    trend: "Next 30 days",
-    trendDir: "down" as const,
-  },
-];
+interface DashboardData {
+  stats: {
+    totalAssets: number;
+    totalSoftware: number;
+    totalLicenses: number;
+  };
+  assetsByType: { name: string; value: number }[];
+  assetsByStatus: { name: string; value: number }[];
+  recentAssets: {
+    id: string;
+    assetTag: string;
+    name: string;
+    type: string;
+    assignedToName: string;
+    department: string;
+    createdAt: string;
+  }[];
+  expiringLicenses: {
+    software: string;
+    licenses: number;
+    expiry: string;
+    daysLeft: number;
+  }[];
+}
 
 const iconBg: Record<string, string> = {
   blue: "bg-blue-500/10 text-blue-400",
@@ -77,14 +70,6 @@ const trendColor: Record<string, string> = {
   down: "text-amber-400",
 };
 
-const pieData = [
-  { name: "Desktops", value: 312 },
-  { name: "Laptops", value: 285 },
-  { name: "Servers", value: 64 },
-  { name: "Printers", value: 47 },
-  { name: "Peripherals", value: 139 },
-];
-
 const PIE_COLORS = [
   "#3b82f6",
   "#8b5cf6",
@@ -93,6 +78,7 @@ const PIE_COLORS = [
   "#10b981",
 ];
 
+// Mock data for bar chart (no lifecycle trend endpoint exists yet)
 const barData = [
   { month: "Oct", Procured: 18, Retired: 5 },
   { month: "Nov", Procured: 24, Retired: 8 },
@@ -102,84 +88,116 @@ const barData = [
   { month: "Mar", Procured: 28, Retired: 4 },
 ];
 
-const recentAssets = [
-  {
-    tag: "LPT-2026-0134",
-    name: 'Dell Latitude 7450 - 14"',
-    assignedTo: "James Thompson",
-    department: "Engineering",
-    date: "Mar 13, 2026",
-  },
-  {
-    tag: "DSK-2026-0089",
-    name: "HP EliteDesk 800 G9",
-    assignedTo: "Priya Patel",
-    department: "Finance",
-    date: "Mar 12, 2026",
-  },
-  {
-    tag: "PRN-2026-0012",
-    name: "HP LaserJet Pro M404dn",
-    assignedTo: "Floor 3 - Shared",
-    department: "Shared Services",
-    date: "Mar 11, 2026",
-  },
-  {
-    tag: "LPT-2026-0131",
-    name: 'MacBook Pro 16" M4 Pro',
-    assignedTo: "Anika Singh",
-    department: "Design",
-    date: "Mar 10, 2026",
-  },
-  {
-    tag: "SRV-2026-0005",
-    name: "Dell PowerEdge R760",
-    assignedTo: "Server Room A",
-    department: "Infrastructure",
-    date: "Mar 9, 2026",
-  },
-];
-
-const expiringLicenses = [
-  {
-    software: "Microsoft 365 Business",
-    licenses: 150,
-    expiry: "Apr 15, 2026",
-    daysLeft: 32,
-  },
-  {
-    software: "Adobe Creative Cloud",
-    licenses: 25,
-    expiry: "Mar 28, 2026",
-    daysLeft: 14,
-  },
-  {
-    software: "Slack Business+",
-    licenses: 200,
-    expiry: "Apr 30, 2026",
-    daysLeft: 47,
-  },
-  {
-    software: "Zoom Workplace",
-    licenses: 100,
-    expiry: "Mar 22, 2026",
-    daysLeft: 8,
-  },
-  {
-    software: "AutoCAD LT",
-    licenses: 10,
-    expiry: "May 15, 2026",
-    daysLeft: 62,
-  },
-];
-
 function getDaysLeftBadgeClass(daysLeft: number): string {
   if (daysLeft < 14) return "bg-red-500/10 text-red-400 border-red-500/20";
   if (daysLeft < 30) return "bg-amber-500/10 text-amber-400 border-amber-500/20";
   return "bg-blue-500/10 text-blue-400 border-blue-500/20";
 }
 
+function formatDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="min-h-screen bg-zinc-950 space-y-6 p-6 animate-pulse">
+      <div>
+        <div className="h-8 w-48 bg-zinc-800 rounded" />
+        <div className="h-4 w-72 bg-zinc-800 rounded mt-2" />
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="h-28 bg-zinc-900 border border-zinc-800 rounded-xl" />
+        ))}
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="h-96 bg-zinc-900 border border-zinc-800 rounded-xl" />
+        <div className="h-96 bg-zinc-900 border border-zinc-800 rounded-xl" />
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="h-80 bg-zinc-900 border border-zinc-800 rounded-xl" />
+        <div className="h-80 bg-zinc-900 border border-zinc-800 rounded-xl" />
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
+  const { data, loading, error, refetch } = useApi<DashboardData>(getDashboardData);
+
+  if (loading) {
+    return <DashboardSkeleton />;
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-6">
+        <Card className="bg-zinc-900 border-zinc-800 ring-0 max-w-md w-full">
+          <CardContent className="pt-6 text-center space-y-4">
+            <div className="p-3 rounded-full bg-red-500/10 inline-block">
+              <AlertTriangle className="w-8 h-8 text-red-400" />
+            </div>
+            <div>
+              <p className="text-lg font-medium text-zinc-100">Failed to load dashboard</p>
+              <p className="text-sm text-zinc-400 mt-1">{error}</p>
+            </div>
+            <button
+              onClick={refetch}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-zinc-100 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg transition-colors"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Retry
+            </button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const stats = data?.stats;
+  const pieData = data?.assetsByType ?? [];
+  const recentAssets = data?.recentAssets ?? [];
+  const expiringLicenses = data?.expiringLicenses ?? [];
+
+  const statCards = [
+    {
+      title: "Hardware Assets",
+      value: String(stats?.totalAssets ?? 0),
+      icon: Monitor,
+      color: "blue",
+      trend: `${stats?.totalAssets ?? 0} total`,
+      trendDir: "up" as const,
+    },
+    {
+      title: "Software Titles",
+      value: String(stats?.totalSoftware ?? 0),
+      icon: Package,
+      color: "purple",
+      trend: `${stats?.totalSoftware ?? 0} tracked`,
+      trendDir: "up" as const,
+    },
+    {
+      title: "Active Licenses",
+      value: String(stats?.totalLicenses ?? 0),
+      icon: KeyRound,
+      color: "emerald",
+      trend: `${stats?.totalLicenses ?? 0} active`,
+      trendDir: "up" as const,
+    },
+    {
+      title: "Expiring Soon",
+      value: String(expiringLicenses.length),
+      icon: AlertTriangle,
+      color: "amber",
+      trend: "Next 30 days",
+      trendDir: "down" as const,
+    },
+  ];
+
   return (
     <div className="min-h-screen bg-zinc-950 space-y-6 p-6">
       {/* Header */}
@@ -244,39 +262,45 @@ export default function DashboardPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={pieData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={110}
-                  paddingAngle={3}
-                  dataKey="value"
-                  label={({ name, percent }) =>
-                    `${name} ${((percent ?? 0) * 100).toFixed(0)}%`
-                  }
-                  stroke="none"
-                >
-                  {pieData.map((_, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={PIE_COLORS[index % PIE_COLORS.length]}
-                    />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "#18181b",
-                    border: "1px solid #27272a",
-                    borderRadius: "8px",
-                    color: "#e4e4e7",
-                  }}
-                  itemStyle={{ color: "#a1a1aa" }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+            {pieData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={110}
+                    paddingAngle={3}
+                    dataKey="value"
+                    label={({ name, percent }) =>
+                      `${name} ${((percent ?? 0) * 100).toFixed(0)}%`
+                    }
+                    stroke="none"
+                  >
+                    {pieData.map((_, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={PIE_COLORS[index % PIE_COLORS.length]}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#18181b",
+                      border: "1px solid #27272a",
+                      borderRadius: "8px",
+                      color: "#e4e4e7",
+                    }}
+                    itemStyle={{ color: "#a1a1aa" }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-[300px] text-zinc-500 text-sm">
+                No asset data available
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -347,28 +371,34 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {recentAssets.map((asset, i) => (
-                <div
-                  key={i}
-                  className="flex items-start gap-3 pb-4 border-b border-zinc-800 last:border-0 last:pb-0"
-                >
-                  <div className="p-2 rounded-lg bg-blue-500/10 shrink-0">
-                    <Monitor className="w-4 h-4 text-blue-400" />
+              {recentAssets.length > 0 ? (
+                recentAssets.map((asset) => (
+                  <div
+                    key={asset.id}
+                    className="flex items-start gap-3 pb-4 border-b border-zinc-800 last:border-0 last:pb-0"
+                  >
+                    <div className="p-2 rounded-lg bg-blue-500/10 shrink-0">
+                      <Monitor className="w-4 h-4 text-blue-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-zinc-100">
+                        {asset.name}
+                      </p>
+                      <p className="text-xs text-zinc-500 mt-0.5">
+                        {asset.assetTag} &middot; {asset.assignedToName || "Unassigned"} &middot;{" "}
+                        {asset.department || "N/A"}
+                      </p>
+                    </div>
+                    <span className="text-xs text-zinc-500 shrink-0">
+                      {formatDate(asset.createdAt)}
+                    </span>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-zinc-100">
-                      {asset.name}
-                    </p>
-                    <p className="text-xs text-zinc-500 mt-0.5">
-                      {asset.tag} &middot; {asset.assignedTo} &middot;{" "}
-                      {asset.department}
-                    </p>
-                  </div>
-                  <span className="text-xs text-zinc-500 shrink-0">
-                    {asset.date}
-                  </span>
-                </div>
-              ))}
+                ))
+              ) : (
+                <p className="text-sm text-zinc-500 text-center py-4">
+                  No recent assets
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -385,27 +415,33 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {expiringLicenses.map((license, i) => (
-                <div
-                  key={i}
-                  className="flex items-start gap-3 pb-4 border-b border-zinc-800 last:border-0 last:pb-0"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-zinc-100">
-                      {license.software}
-                    </p>
-                    <p className="text-xs text-zinc-500 mt-0.5">
-                      {license.licenses} licenses &middot; Expires{" "}
-                      {license.expiry}
-                    </p>
-                  </div>
-                  <Badge
-                    className={`shrink-0 ${getDaysLeftBadgeClass(license.daysLeft)}`}
+              {expiringLicenses.length > 0 ? (
+                expiringLicenses.map((license, i) => (
+                  <div
+                    key={i}
+                    className="flex items-start gap-3 pb-4 border-b border-zinc-800 last:border-0 last:pb-0"
                   >
-                    {license.daysLeft} days
-                  </Badge>
-                </div>
-              ))}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-zinc-100">
+                        {license.software}
+                      </p>
+                      <p className="text-xs text-zinc-500 mt-0.5">
+                        {license.licenses} licenses &middot; Expires{" "}
+                        {formatDate(license.expiry)}
+                      </p>
+                    </div>
+                    <Badge
+                      className={`shrink-0 ${getDaysLeftBadgeClass(license.daysLeft)}`}
+                    >
+                      {license.daysLeft} days
+                    </Badge>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-zinc-500 text-center py-4">
+                  No expiring licenses
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>

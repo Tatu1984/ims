@@ -9,6 +9,7 @@ import {
   Plus,
   Monitor,
   MoreHorizontal,
+  Loader2,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -40,97 +41,40 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useApi } from "@/frontend/hooks/use-api";
+import {
+  getTickets,
+  createTicket,
+  updateTicket,
+} from "@/frontend/api/endpoints/tickets.api";
+import { getUsers } from "@/frontend/api/endpoints/users.api";
 
 type Priority = "High" | "Medium" | "Low";
-type TicketStatus = "Open" | "In Progress" | "Resolved" | "Closed";
+type TicketStatus = "Open" | "InProgress" | "Resolved" | "Closed";
+type SLA = "OnTrack" | "AtRisk" | "Breached";
 
-interface HelpTicket {
+interface ApiTicket {
   id: string;
+  ticketNumber: string;
   title: string;
-  description: string;
+  description: string | null;
   priority: Priority;
   status: TicketStatus;
-  assignedTo: string;
-  initials: string;
-  device: string;
-  created: string;
-  sla: "On Track" | "At Risk" | "Breached";
+  sla: SLA;
+  assignedTo: { id: string; name: string; initials: string } | null;
+  assignedToId: string | null;
+  device: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
-const initialTickets: HelpTicket[] = [
-  {
-    id: "TKT-1042",
-    title: "Unable to connect to network printer on 3rd floor",
-    description: "Users on the 3rd floor cannot print to the shared printer.",
-    priority: "High",
-    status: "Open",
-    assignedTo: "Mike Chen",
-    initials: "MC",
-    device: "prn-floor3-01",
-    created: "2026-03-14 09:15",
-    sla: "At Risk",
-  },
-  {
-    id: "TKT-1041",
-    title: "Laptop running extremely slow after update",
-    description: "Performance degradation after latest Windows update.",
-    priority: "Medium",
-    status: "In Progress",
-    assignedTo: "Sarah Kim",
-    initials: "SK",
-    device: "ws-eng-042",
-    created: "2026-03-14 08:30",
-    sla: "On Track",
-  },
-  {
-    id: "TKT-1040",
-    title: "VPN connection drops intermittently",
-    description: "Remote users experiencing frequent VPN disconnections.",
-    priority: "High",
-    status: "Open",
-    assignedTo: "James Liu",
-    initials: "JL",
-    device: "rtr-vpn-01",
-    created: "2026-03-13 16:45",
-    sla: "Breached",
-  },
-  {
-    id: "TKT-1039",
-    title: "Request for additional monitor setup",
-    description: "HR department requesting dual monitor configuration.",
-    priority: "Low",
-    status: "In Progress",
-    assignedTo: "Mike Chen",
-    initials: "MC",
-    device: "ws-hr-015",
-    created: "2026-03-13 14:20",
-    sla: "On Track",
-  },
-  {
-    id: "TKT-1038",
-    title: "Email sync failing on Outlook desktop client",
-    description: "Outlook not syncing new emails on marketing workstation.",
-    priority: "Medium",
-    status: "Resolved",
-    assignedTo: "Sarah Kim",
-    initials: "SK",
-    device: "ws-mkt-008",
-    created: "2026-03-13 10:00",
-    sla: "On Track",
-  },
-  {
-    id: "TKT-1037",
-    title: "Server room UPS battery replacement needed",
-    description: "UPS unit in rack 2 reporting battery degradation alerts.",
-    priority: "High",
-    status: "Closed",
-    assignedTo: "James Liu",
-    initials: "JL",
-    device: "ups-rack-02",
-    created: "2026-03-12 11:30",
-    sla: "On Track",
-  },
-];
+interface ApiUser {
+  id: string;
+  name: string;
+  initials: string;
+  email: string;
+  role: string;
+}
 
 const priorityColor: Record<Priority, string> = {
   High: "bg-red-500/15 text-red-400 border-red-500/30",
@@ -140,54 +84,75 @@ const priorityColor: Record<Priority, string> = {
 
 const statusColor: Record<TicketStatus, string> = {
   Open: "bg-blue-500/15 text-blue-400 border-blue-500/30",
-  "In Progress": "bg-amber-500/15 text-amber-400 border-amber-500/30",
+  InProgress: "bg-amber-500/15 text-amber-400 border-amber-500/30",
   Resolved: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
   Closed: "bg-zinc-500/15 text-zinc-400 border-zinc-500/30",
 };
 
-const slaColor: Record<string, string> = {
-  "On Track": "text-emerald-400",
-  "At Risk": "text-amber-400",
+const slaColor: Record<SLA, string> = {
+  OnTrack: "text-emerald-400",
+  AtRisk: "text-amber-400",
   Breached: "text-red-400",
 };
 
-const assets = [
-  "prn-floor3-01",
-  "ws-eng-042",
-  "rtr-vpn-01",
-  "ws-hr-015",
-  "ws-mkt-008",
-  "ups-rack-02",
-  "srv-db-01",
-  "sw-core-01",
-];
+const statusDisplayLabel: Record<TicketStatus, string> = {
+  Open: "Open",
+  InProgress: "In Progress",
+  Resolved: "Resolved",
+  Closed: "Closed",
+};
 
-const teamMembers = [
-  { name: "Mike Chen", initials: "MC" },
-  { name: "Sarah Kim", initials: "SK" },
-  { name: "James Liu", initials: "JL" },
-];
+const slaDisplayLabel: Record<SLA, string> = {
+  OnTrack: "On Track",
+  AtRisk: "At Risk",
+  Breached: "Breached",
+};
+
+function formatDate(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 export default function TicketsPage() {
   const [activeTab, setActiveTab] = useState("All");
-  const [tickets, setTickets] = useState<HelpTicket[]>(initialTickets);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Fetch tickets
+  const {
+    data: ticketsData,
+    loading,
+    error,
+    refetch,
+  } = useApi<{ data: ApiTicket[]; total: number }>(() => getTickets());
+
+  // Fetch users for assignee dropdown
+  const { data: usersData } = useApi<ApiUser[]>(() => getUsers());
+
+  const tickets = ticketsData?.data ?? [];
+  const teamMembers = usersData ?? [];
 
   // Form state
   const [newTitle, setNewTitle] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [newPriority, setNewPriority] = useState<Priority>("Medium");
-  const [newAsset, setNewAsset] = useState(assets[0]);
-  const [newAssignee, setNewAssignee] = useState(teamMembers[0].name);
+  const [newDevice, setNewDevice] = useState("");
+  const [newAssigneeId, setNewAssigneeId] = useState("");
 
   // View Details dialog
   const [detailOpen, setDetailOpen] = useState(false);
-  const [selectedTicket, setSelectedTicket] = useState<HelpTicket | null>(null);
+  const [selectedTicket, setSelectedTicket] = useState<ApiTicket | null>(null);
 
   // Assign dialog
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignTicketId, setAssignTicketId] = useState("");
-  const [assignTo, setAssignTo] = useState(teamMembers[0].name);
+  const [assignToId, setAssignToId] = useState("");
 
   // Change Status dialog
   const [statusOpen, setStatusOpen] = useState(false);
@@ -197,80 +162,98 @@ export default function TicketsPage() {
   // Close Ticket confirm
   const [closeOpen, setCloseOpen] = useState(false);
   const [closeTicketId, setCloseTicketId] = useState("");
+  const [closeTicketNumber, setCloseTicketNumber] = useState("");
 
   const filteredTickets =
     activeTab === "All"
       ? tickets
       : tickets.filter((t) => t.status === activeTab);
 
-  function handleCreateTicket() {
+  async function handleCreateTicket() {
     if (!newTitle.trim()) return;
-    const member = teamMembers.find((m) => m.name === newAssignee) ?? teamMembers[0];
-    const newTicket: HelpTicket = {
-      id: `TKT-${1043 + tickets.length - initialTickets.length}`,
-      title: newTitle,
-      description: newDescription,
-      priority: newPriority,
-      status: "Open",
-      assignedTo: member.name,
-      initials: member.initials,
-      device: newAsset,
-      created: new Date().toISOString().slice(0, 16).replace("T", " "),
-      sla: "On Track",
-    };
-    setTickets([newTicket, ...tickets]);
-    setNewTitle("");
-    setNewDescription("");
-    setNewPriority("Medium");
-    setNewAsset(assets[0]);
-    setNewAssignee(teamMembers[0].name);
-    setDialogOpen(false);
+    setSubmitting(true);
+    try {
+      await createTicket({
+        title: newTitle.trim(),
+        description: newDescription.trim() || undefined,
+        priority: newPriority,
+        assignedToId: newAssigneeId || undefined,
+        device: newDevice.trim() || undefined,
+      });
+      setNewTitle("");
+      setNewDescription("");
+      setNewPriority("Medium");
+      setNewDevice("");
+      setNewAssigneeId("");
+      setDialogOpen(false);
+      await refetch();
+    } catch {
+      // error handled by useApi on refetch
+    } finally {
+      setSubmitting(false);
+    }
   }
 
-  function handleViewDetails(ticket: HelpTicket) {
+  function handleViewDetails(ticket: ApiTicket) {
     setSelectedTicket(ticket);
     setDetailOpen(true);
   }
 
-  function handleAssign(ticket: HelpTicket) {
+  function handleAssign(ticket: ApiTicket) {
     setAssignTicketId(ticket.id);
-    setAssignTo(ticket.assignedTo);
+    setAssignToId(ticket.assignedToId ?? "");
     setAssignOpen(true);
   }
 
-  function confirmAssign() {
-    const member = teamMembers.find((m) => m.name === assignTo) ?? teamMembers[0];
-    setTickets((prev) =>
-      prev.map((t) =>
-        t.id === assignTicketId ? { ...t, assignedTo: member.name, initials: member.initials } : t
-      )
-    );
-    setAssignOpen(false);
+  async function confirmAssign() {
+    setSubmitting(true);
+    try {
+      await updateTicket(assignTicketId, { assignedToId: assignToId || null });
+      setAssignOpen(false);
+      await refetch();
+    } catch {
+      // ignore
+    } finally {
+      setSubmitting(false);
+    }
   }
 
-  function handleChangeStatus(ticket: HelpTicket) {
+  function handleChangeStatus(ticket: ApiTicket) {
     setStatusTicketId(ticket.id);
     setNewStatus(ticket.status);
     setStatusOpen(true);
   }
 
-  function confirmChangeStatus() {
-    setTickets((prev) =>
-      prev.map((t) => (t.id === statusTicketId ? { ...t, status: newStatus } : t))
-    );
-    setStatusOpen(false);
+  async function confirmChangeStatus() {
+    setSubmitting(true);
+    try {
+      await updateTicket(statusTicketId, { status: newStatus });
+      setStatusOpen(false);
+      await refetch();
+    } catch {
+      // ignore
+    } finally {
+      setSubmitting(false);
+    }
   }
 
-  function handleCloseTicket(ticket: HelpTicket) {
+  function handleCloseTicket(ticket: ApiTicket) {
     setCloseTicketId(ticket.id);
+    setCloseTicketNumber(ticket.ticketNumber);
     setCloseOpen(true);
   }
 
-  function confirmClose() {
-    setTickets((prev) =>
-      prev.map((t) => (t.id === closeTicketId ? { ...t, status: "Closed" as TicketStatus } : t))
-    );
-    setCloseOpen(false);
+  async function confirmClose() {
+    setSubmitting(true);
+    try {
+      await updateTicket(closeTicketId, { status: "Closed" });
+      setCloseOpen(false);
+      await refetch();
+    } catch {
+      // ignore
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   const stats = [
@@ -282,7 +265,7 @@ export default function TicketsPage() {
     },
     {
       label: "In Progress",
-      value: String(tickets.filter((t) => t.status === "In Progress").length),
+      value: String(tickets.filter((t) => t.status === "InProgress").length),
       icon: <Ticket className="h-5 w-5 text-amber-400" />,
       iconBg: "bg-amber-500/15",
     },
@@ -299,6 +282,26 @@ export default function TicketsPage() {
       iconBg: "bg-purple-500/15",
     },
   ];
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-zinc-400" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-4">
+        <AlertCircle className="h-10 w-10 text-red-400" />
+        <p className="text-sm text-red-400">{error}</p>
+        <Button variant="outline" onClick={refetch}>
+          Retry
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -360,13 +363,13 @@ export default function TicketsPage() {
                 </div>
                 <div className="space-y-2">
                   <Label className="text-zinc-300">Assigned To</Label>
-                  <Select value={newAssignee} onValueChange={(val) => { if (val) setNewAssignee(val); }}>
+                  <Select value={newAssigneeId} onValueChange={(val) => { if (val) setNewAssigneeId(val); }}>
                     <SelectTrigger className="w-full bg-zinc-800 border-zinc-700 text-zinc-100">
-                      <SelectValue />
+                      <SelectValue placeholder="Select assignee" />
                     </SelectTrigger>
                     <SelectContent className="bg-zinc-800 border-zinc-700">
                       {teamMembers.map((m) => (
-                        <SelectItem key={m.name} value={m.name}>
+                        <SelectItem key={m.id} value={m.id}>
                           {m.name}
                         </SelectItem>
                       ))}
@@ -375,26 +378,22 @@ export default function TicketsPage() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label className="text-zinc-300">Asset</Label>
-                <Select value={newAsset} onValueChange={(val) => { if (val) setNewAsset(val); }}>
-                  <SelectTrigger className="w-full bg-zinc-800 border-zinc-700 text-zinc-100">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-zinc-800 border-zinc-700">
-                    {assets.map((a) => (
-                      <SelectItem key={a} value={a}>
-                        {a}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label className="text-zinc-300">Device</Label>
+                <Input
+                  placeholder="e.g. prn-floor3-01"
+                  value={newDevice}
+                  onChange={(e) => setNewDevice(e.target.value)}
+                  className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
+                />
               </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleCreateTicket}>Create Ticket</Button>
+              <Button onClick={handleCreateTicket} disabled={submitting}>
+                {submitting ? "Creating..." : "Create Ticket"}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -430,7 +429,7 @@ export default function TicketsPage() {
         <TabsList className="bg-zinc-900 border border-zinc-800">
           <TabsTrigger value="All">All</TabsTrigger>
           <TabsTrigger value="Open">Open</TabsTrigger>
-          <TabsTrigger value="In Progress">In Progress</TabsTrigger>
+          <TabsTrigger value="InProgress">In Progress</TabsTrigger>
           <TabsTrigger value="Resolved">Resolved</TabsTrigger>
           <TabsTrigger value="Closed">Closed</TabsTrigger>
         </TabsList>
@@ -448,7 +447,7 @@ export default function TicketsPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1.5">
                     <span className="text-xs font-mono text-zinc-500">
-                      {ticket.id}
+                      {ticket.ticketNumber}
                     </span>
                     <Badge
                       className={`text-[11px] border ${priorityColor[ticket.priority]}`}
@@ -458,40 +457,44 @@ export default function TicketsPage() {
                     <Badge
                       className={`text-[11px] border ${statusColor[ticket.status]}`}
                     >
-                      {ticket.status}
+                      {statusDisplayLabel[ticket.status]}
                     </Badge>
                   </div>
                   <h3 className="text-sm font-semibold text-zinc-100 mb-2">
                     {ticket.title}
                   </h3>
                   <div className="flex flex-wrap items-center gap-4 text-xs text-zinc-500">
-                    <span className="inline-flex items-center gap-1">
-                      <Monitor className="h-3.5 w-3.5" />
-                      {ticket.device}
-                    </span>
+                    {ticket.device && (
+                      <span className="inline-flex items-center gap-1">
+                        <Monitor className="h-3.5 w-3.5" />
+                        {ticket.device}
+                      </span>
+                    )}
                     <span className="inline-flex items-center gap-1">
                       <Clock className="h-3.5 w-3.5" />
-                      {ticket.created}
+                      {formatDate(ticket.createdAt)}
                     </span>
                     <span
                       className={`inline-flex items-center gap-1 font-medium ${slaColor[ticket.sla]}`}
                     >
-                      SLA: {ticket.sla}
+                      SLA: {slaDisplayLabel[ticket.sla]}
                     </span>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-800 text-xs font-semibold text-zinc-300 border border-zinc-700"
-                      title={ticket.assignedTo}
-                    >
-                      {ticket.initials}
+                  {ticket.assignedTo && (
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-800 text-xs font-semibold text-zinc-300 border border-zinc-700"
+                        title={ticket.assignedTo.name}
+                      >
+                        {ticket.assignedTo.initials}
+                      </div>
+                      <span className="text-xs text-zinc-400 hidden sm:block">
+                        {ticket.assignedTo.name}
+                      </span>
                     </div>
-                    <span className="text-xs text-zinc-400 hidden sm:block">
-                      {ticket.assignedTo}
-                    </span>
-                  </div>
+                  )}
                   <DropdownMenu>
                     <DropdownMenuTrigger
                       render={
@@ -546,34 +549,34 @@ export default function TicketsPage() {
           {selectedTicket && (
             <div className="space-y-4 py-2">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-mono text-zinc-500">{selectedTicket.id}</span>
+                <span className="text-xs font-mono text-zinc-500">{selectedTicket.ticketNumber}</span>
                 <Badge className={`text-[11px] border ${priorityColor[selectedTicket.priority]}`}>
                   {selectedTicket.priority}
                 </Badge>
                 <Badge className={`text-[11px] border ${statusColor[selectedTicket.status]}`}>
-                  {selectedTicket.status}
+                  {statusDisplayLabel[selectedTicket.status]}
                 </Badge>
               </div>
               <div>
                 <p className="text-sm font-semibold text-zinc-100">{selectedTicket.title}</p>
-                <p className="mt-2 text-sm text-zinc-400">{selectedTicket.description}</p>
+                <p className="mt-2 text-sm text-zinc-400">{selectedTicket.description || "No description provided."}</p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <p className="text-xs text-zinc-500 uppercase">Assigned To</p>
-                  <p className="text-sm text-zinc-100">{selectedTicket.assignedTo}</p>
+                  <p className="text-sm text-zinc-100">{selectedTicket.assignedTo?.name ?? "Unassigned"}</p>
                 </div>
                 <div>
                   <p className="text-xs text-zinc-500 uppercase">Device</p>
-                  <p className="text-sm font-mono text-zinc-100">{selectedTicket.device}</p>
+                  <p className="text-sm font-mono text-zinc-100">{selectedTicket.device || "N/A"}</p>
                 </div>
                 <div>
                   <p className="text-xs text-zinc-500 uppercase">Created</p>
-                  <p className="text-sm text-zinc-100">{selectedTicket.created}</p>
+                  <p className="text-sm text-zinc-100">{formatDate(selectedTicket.createdAt)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-zinc-500 uppercase">SLA Status</p>
-                  <p className={`text-sm font-medium ${slaColor[selectedTicket.sla]}`}>{selectedTicket.sla}</p>
+                  <p className={`text-sm font-medium ${slaColor[selectedTicket.sla]}`}>{slaDisplayLabel[selectedTicket.sla]}</p>
                 </div>
               </div>
             </div>
@@ -594,13 +597,13 @@ export default function TicketsPage() {
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label className="text-zinc-300">Assign To</Label>
-              <Select value={assignTo} onValueChange={(val) => { if (val) setAssignTo(val); }}>
+              <Select value={assignToId} onValueChange={(val) => { if (val) setAssignToId(val); }}>
                 <SelectTrigger className="w-full bg-zinc-800 border-zinc-700 text-zinc-100">
-                  <SelectValue />
+                  <SelectValue placeholder="Select assignee" />
                 </SelectTrigger>
                 <SelectContent className="bg-zinc-800 border-zinc-700">
                   {teamMembers.map((m) => (
-                    <SelectItem key={m.name} value={m.name}>{m.name}</SelectItem>
+                    <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -608,7 +611,9 @@ export default function TicketsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAssignOpen(false)}>Cancel</Button>
-            <Button onClick={confirmAssign}>Assign</Button>
+            <Button onClick={confirmAssign} disabled={submitting}>
+              {submitting ? "Assigning..." : "Assign"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -629,7 +634,7 @@ export default function TicketsPage() {
                 </SelectTrigger>
                 <SelectContent className="bg-zinc-800 border-zinc-700">
                   <SelectItem value="Open">Open</SelectItem>
-                  <SelectItem value="In Progress">In Progress</SelectItem>
+                  <SelectItem value="InProgress">In Progress</SelectItem>
                   <SelectItem value="Resolved">Resolved</SelectItem>
                   <SelectItem value="Closed">Closed</SelectItem>
                 </SelectContent>
@@ -638,7 +643,9 @@ export default function TicketsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setStatusOpen(false)}>Cancel</Button>
-            <Button onClick={confirmChangeStatus}>Update Status</Button>
+            <Button onClick={confirmChangeStatus} disabled={submitting}>
+              {submitting ? "Updating..." : "Update Status"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -649,7 +656,7 @@ export default function TicketsPage() {
           <DialogHeader>
             <DialogTitle className="text-zinc-100">Close Ticket</DialogTitle>
             <DialogDescription>
-              Are you sure you want to close ticket <span className="font-medium text-zinc-200">{closeTicketId}</span>?
+              Are you sure you want to close ticket <span className="font-medium text-zinc-200">{closeTicketNumber}</span>?
             </DialogDescription>
           </DialogHeader>
           <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-300">
@@ -657,7 +664,9 @@ export default function TicketsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCloseOpen(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={confirmClose}>Close Ticket</Button>
+            <Button variant="destructive" onClick={confirmClose} disabled={submitting}>
+              {submitting ? "Closing..." : "Close Ticket"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

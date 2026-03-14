@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -58,30 +58,30 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-const asset = {
-  id: "ast-001",
-  assetTag: "LPT-2025-0451",
-  name: "Dell Latitude 7450",
-  type: "Laptop",
-  status: "Active",
-  serialNumber: "DL7450-XK9R2",
-  manufacturer: "Dell Technologies",
-  model: "Latitude 7450",
-  os: "Windows 11 Pro 24H2",
-  department: "Engineering",
-  location: "Building A, Floor 3, Desk 42",
-  assignedTo: "James Thompson",
-  purchaseDate: "Jan 15, 2025",
-  warrantyExpiry: "Jan 15, 2028",
-  purchaseCost: "$1,849.00",
-  cpu: "Intel Core Ultra 7 155H",
-  ram: "32 GB DDR5-5600",
-  ramCapacity: 32,
-  disk: "1 TB NVMe SSD (Samsung 990 Pro)",
-  diskTotal: 1000,
-  diskUsed: 470,
-};
+import { useApi } from "@/frontend/hooks/use-api";
+import { getAsset, updateAsset } from "@/frontend/api/endpoints/assets.api";
+import { createTicket } from "@/frontend/api/endpoints/tickets.api";
 
+interface AssetDetail {
+  id: string;
+  assetTag: string;
+  name: string;
+  type: string;
+  status: string;
+  serialNumber: string;
+  assignedToName: string;
+  assignedTo?: { id: string; name: string; initials: string } | null;
+  department: string;
+  location?: string | null;
+  purchaseDate?: string | null;
+  purchaseCost?: number | string | null;
+  warrantyExpiry?: string | null;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Static mock data (would need separate APIs)
 const hardwareComponents = [
   { component: "Processor", spec: "Intel Core Ultra 7 155H", details: "16 cores / 22 threads, up to 4.8 GHz", status: "OK" },
   { component: "Memory Module 1", spec: "16 GB DDR5-5600 SODIMM", details: "Samsung M425R2GA3BB0-CQKOL", status: "OK" },
@@ -178,6 +178,48 @@ const historyEvents = [
   },
 ];
 
+function formatDate(iso: string | null | undefined): string {
+  if (!iso) return "N/A";
+  return new Date(iso).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function formatCurrency(value: string | number | null | undefined): string {
+  if (value == null) return "N/A";
+  const num = typeof value === "string" ? parseFloat(value) : value;
+  if (isNaN(num)) return "N/A";
+  return num.toLocaleString("en-US", { style: "currency", currency: "USD" });
+}
+
+function statusBadgeClass(status: string): string {
+  switch (status) {
+    case "Active":
+      return "bg-green-500/15 text-green-400";
+    case "InStorage":
+      return "bg-blue-500/15 text-blue-400";
+    case "Maintenance":
+      return "bg-amber-500/15 text-amber-400";
+    case "Retired":
+      return "bg-zinc-500/15 text-zinc-400";
+    default:
+      return "bg-green-500/15 text-green-400";
+  }
+}
+
+function typeBadgeLabel(type: string): string {
+  switch (type) {
+    case "desktop": return "Desktop";
+    case "laptop": return "Laptop";
+    case "server": return "Server";
+    case "printer": return "Printer";
+    case "peripheral": return "Peripheral";
+    default: return type;
+  }
+}
+
 function ProgressBar({
   value,
   max,
@@ -211,18 +253,50 @@ function ProgressBar({
   );
 }
 
+function LoadingSkeleton() {
+  return (
+    <div className="min-h-screen space-y-6 bg-zinc-950 p-6 animate-pulse">
+      <div className="h-8 w-32 bg-zinc-800 rounded" />
+      <div className="space-y-2">
+        <div className="h-8 w-64 bg-zinc-800 rounded" />
+        <div className="h-4 w-48 bg-zinc-800 rounded" />
+      </div>
+      <div className="h-10 w-80 bg-zinc-900 border border-zinc-800 rounded-lg" />
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="space-y-6 lg:col-span-2">
+          <div className="h-64 bg-zinc-900 border border-zinc-800 rounded-xl" />
+          <div className="h-48 bg-zinc-900 border border-zinc-800 rounded-xl" />
+        </div>
+        <div className="space-y-6">
+          <div className="h-48 bg-zinc-900 border border-zinc-800 rounded-xl" />
+          <div className="h-64 bg-zinc-900 border border-zinc-800 rounded-xl" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AssetDetailPage() {
   const params = useParams();
+  const router = useRouter();
+  const id = params.id as string;
+
+  const { data: asset, loading, error, refetch } = useApi<AssetDetail>(
+    () => getAsset(id),
+    [id]
+  );
+
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [ticketDialogOpen, setTicketDialogOpen] = useState(false);
   const [reassignDialogOpen, setReassignDialogOpen] = useState(false);
   const [retireDialogOpen, setRetireDialogOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   // Edit form state
-  const [editName, setEditName] = useState(asset.name);
-  const [editAssignedTo, setEditAssignedTo] = useState(asset.assignedTo);
-  const [editDepartment, setEditDepartment] = useState(asset.department);
-  const [editLocation, setEditLocation] = useState(asset.location);
+  const [editName, setEditName] = useState("");
+  const [editAssignedTo, setEditAssignedTo] = useState("");
+  const [editDepartment, setEditDepartment] = useState("");
+  const [editLocation, setEditLocation] = useState("");
 
   // Ticket form state
   const [ticketTitle, setTicketTitle] = useState("");
@@ -231,6 +305,133 @@ export default function AssetDetailPage() {
   // Reassign form state
   const [reassignTo, setReassignTo] = useState("");
   const [reassignDept, setReassignDept] = useState("");
+
+  // Populate edit form when dialog opens
+  const handleEditOpen = (open: boolean) => {
+    if (open && asset) {
+      setEditName(asset.name);
+      setEditAssignedTo(asset.assignedToName || "");
+      setEditDepartment(asset.department || "");
+      setEditLocation(asset.location || "");
+    }
+    setEditDialogOpen(open);
+  };
+
+  // Save edit
+  const handleEditSave = async () => {
+    setSaving(true);
+    try {
+      await updateAsset(id, {
+        name: editName,
+        assignedToName: editAssignedTo,
+        department: editDepartment,
+        location: editLocation,
+      });
+      setEditDialogOpen(false);
+      await refetch();
+    } catch (err) {
+      console.error("Failed to update asset:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Create ticket
+  const handleCreateTicket = async () => {
+    setSaving(true);
+    try {
+      await createTicket({
+        title: ticketTitle,
+        description: ticketDescription,
+        assetId: id,
+      });
+      setTicketDialogOpen(false);
+      setTicketTitle("");
+      setTicketDescription("");
+    } catch (err) {
+      console.error("Failed to create ticket:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Reassign
+  const handleReassign = async () => {
+    setSaving(true);
+    try {
+      await updateAsset(id, {
+        assignedToName: reassignTo,
+        department: reassignDept,
+      });
+      setReassignDialogOpen(false);
+      setReassignTo("");
+      setReassignDept("");
+      await refetch();
+    } catch (err) {
+      console.error("Failed to reassign asset:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Retire
+  const handleRetire = async () => {
+    setSaving(true);
+    try {
+      await updateAsset(id, { status: "Retired" });
+      setRetireDialogOpen(false);
+      await refetch();
+    } catch (err) {
+      console.error("Failed to retire asset:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return <LoadingSkeleton />;
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-zinc-950 p-6">
+        <Link href="/assets">
+          <Button variant="ghost" className="text-zinc-400 hover:text-zinc-100 -ml-2">
+            <ArrowLeft className="h-4 w-4" />
+            Back to Assets
+          </Button>
+        </Link>
+        <div className="mt-12 flex flex-col items-center justify-center text-center">
+          <AlertCircle className="h-12 w-12 text-red-400 mb-4" />
+          <h2 className="text-xl font-semibold text-zinc-100 mb-2">Error Loading Asset</h2>
+          <p className="text-zinc-400 mb-4">{error}</p>
+          <Button onClick={() => refetch()} variant="outline" className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">
+            Try Again
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!asset) {
+    return (
+      <div className="min-h-screen bg-zinc-950 p-6">
+        <Link href="/assets">
+          <Button variant="ghost" className="text-zinc-400 hover:text-zinc-100 -ml-2">
+            <ArrowLeft className="h-4 w-4" />
+            Back to Assets
+          </Button>
+        </Link>
+        <div className="mt-12 flex flex-col items-center justify-center text-center">
+          <Package className="h-12 w-12 text-zinc-500 mb-4" />
+          <h2 className="text-xl font-semibold text-zinc-100 mb-2">Asset Not Found</h2>
+          <p className="text-zinc-400">The asset you are looking for does not exist or has been removed.</p>
+        </div>
+      </div>
+    );
+  }
+
+  const assignedToDisplay = asset.assignedTo?.name || asset.assignedToName || "Unassigned";
 
   return (
     <div className="min-h-screen space-y-6 bg-zinc-950 p-6">
@@ -246,11 +447,11 @@ export default function AssetDetailPage() {
       <div>
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-bold text-zinc-100">{asset.name}</h1>
-          <Badge className="bg-green-500/15 text-green-400">
+          <Badge className={statusBadgeClass(asset.status)}>
             {asset.status}
           </Badge>
           <Badge variant="outline" className="border-purple-500/50 text-purple-400 bg-purple-500/10">
-            {asset.type}
+            {typeBadgeLabel(asset.type)}
           </Badge>
         </div>
         <p className="mt-1 text-sm text-zinc-400">
@@ -296,57 +497,59 @@ export default function AssetDetailPage() {
                     <div className="flex items-start gap-3">
                       <Monitor className="mt-0.5 h-5 w-5 text-zinc-500" />
                       <div>
-                        <p className="text-xs font-medium uppercase text-zinc-500">Manufacturer / Model</p>
-                        <p className="text-sm text-zinc-100">{asset.manufacturer} -- {asset.model}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <Monitor className="mt-0.5 h-5 w-5 text-zinc-500" />
-                      <div>
-                        <p className="text-xs font-medium uppercase text-zinc-500">Operating System</p>
-                        <p className="text-sm text-zinc-100">{asset.os}</p>
+                        <p className="text-xs font-medium uppercase text-zinc-500">Type</p>
+                        <p className="text-sm text-zinc-100">{typeBadgeLabel(asset.type)}</p>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
                       <User className="mt-0.5 h-5 w-5 text-zinc-500" />
                       <div>
                         <p className="text-xs font-medium uppercase text-zinc-500">Assigned To</p>
-                        <p className="text-sm text-zinc-100">{asset.assignedTo}</p>
+                        <p className="text-sm text-zinc-100">{assignedToDisplay}</p>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
                       <Building2 className="mt-0.5 h-5 w-5 text-zinc-500" />
                       <div>
                         <p className="text-xs font-medium uppercase text-zinc-500">Department</p>
-                        <p className="text-sm text-zinc-100">{asset.department}</p>
+                        <p className="text-sm text-zinc-100">{asset.department || "N/A"}</p>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
                       <MapPin className="mt-0.5 h-5 w-5 text-zinc-500" />
                       <div>
                         <p className="text-xs font-medium uppercase text-zinc-500">Location</p>
-                        <p className="text-sm text-zinc-100">{asset.location}</p>
+                        <p className="text-sm text-zinc-100">{asset.location || "N/A"}</p>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
                       <Calendar className="mt-0.5 h-5 w-5 text-zinc-500" />
                       <div>
                         <p className="text-xs font-medium uppercase text-zinc-500">Purchase Date / Cost</p>
-                        <p className="text-sm text-zinc-100">{asset.purchaseDate} &middot; {asset.purchaseCost}</p>
+                        <p className="text-sm text-zinc-100">{formatDate(asset.purchaseDate)} &middot; {formatCurrency(asset.purchaseCost)}</p>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
                       <ShieldCheck className="mt-0.5 h-5 w-5 text-zinc-500" />
                       <div>
                         <p className="text-xs font-medium uppercase text-zinc-500">Warranty Expiry</p>
-                        <p className="text-sm text-zinc-100">{asset.warrantyExpiry}</p>
+                        <p className="text-sm text-zinc-100">{formatDate(asset.warrantyExpiry)}</p>
                       </div>
                     </div>
+                    {asset.notes && (
+                      <div className="flex items-start gap-3 sm:col-span-2">
+                        <Package className="mt-0.5 h-5 w-5 text-zinc-500" />
+                        <div>
+                          <p className="text-xs font-medium uppercase text-zinc-500">Notes</p>
+                          <p className="text-sm text-zinc-100">{asset.notes}</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
 
-              {/* Hardware Specs Card */}
+              {/* Hardware Specs Card (static mock) */}
               <Card className="bg-zinc-900 border-zinc-800">
                 <CardHeader>
                   <CardTitle className="text-zinc-100">Hardware Specifications</CardTitle>
@@ -356,22 +559,22 @@ export default function AssetDetailPage() {
                     <div className="flex items-center gap-2 text-sm">
                       <Cpu className="h-4 w-4 text-zinc-500" />
                       <span className="font-medium text-zinc-400">Processor:</span>
-                      <span className="text-zinc-100">{asset.cpu}</span>
+                      <span className="text-zinc-100">Intel Core Ultra 7 155H</span>
                     </div>
                     <div className="flex items-center gap-2 text-sm">
                       <MemoryStick className="h-4 w-4 text-zinc-500" />
                       <span className="font-medium text-zinc-400">Memory:</span>
-                      <span className="text-zinc-100">{asset.ram}</span>
+                      <span className="text-zinc-100">32 GB DDR5-5600</span>
                     </div>
                     <div>
                       <div className="flex items-center gap-2 text-sm mb-3">
                         <HardDrive className="h-4 w-4 text-zinc-500" />
                         <span className="font-medium text-zinc-400">Storage:</span>
-                        <span className="text-zinc-100">{asset.disk}</span>
+                        <span className="text-zinc-100">1 TB NVMe SSD (Samsung 990 Pro)</span>
                       </div>
                       <ProgressBar
-                        value={asset.diskUsed}
-                        max={asset.diskTotal}
+                        value={470}
+                        max={1000}
                         label="Disk Usage"
                         unit="GB"
                       />
@@ -391,7 +594,7 @@ export default function AssetDetailPage() {
                 <CardContent>
                   <div className="space-y-2">
                     {/* Edit Asset Dialog */}
-                    <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+                    <Dialog open={editDialogOpen} onOpenChange={handleEditOpen}>
                       <DialogTrigger render={
                         <Button variant="outline" className="w-full justify-start border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100" />
                       }>
@@ -425,7 +628,7 @@ export default function AssetDetailPage() {
                         </div>
                         <DialogFooter>
                           <Button variant="outline" onClick={() => setEditDialogOpen(false)} className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">Cancel</Button>
-                          <Button onClick={() => { console.log("Saving:", { editName, editAssignedTo, editDepartment, editLocation }); setEditDialogOpen(false); }}>Save Changes</Button>
+                          <Button onClick={handleEditSave} disabled={saving}>{saving ? "Saving..." : "Save Changes"}</Button>
                         </DialogFooter>
                       </DialogContent>
                     </Dialog>
@@ -463,7 +666,7 @@ export default function AssetDetailPage() {
                         </div>
                         <DialogFooter>
                           <Button variant="outline" onClick={() => setTicketDialogOpen(false)} className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">Cancel</Button>
-                          <Button onClick={() => { console.log("Creating ticket:", { ticketTitle, ticketDescription, assetId: asset.id }); setTicketDialogOpen(false); setTicketTitle(""); setTicketDescription(""); }}>Create Ticket</Button>
+                          <Button onClick={handleCreateTicket} disabled={saving}>{saving ? "Creating..." : "Create Ticket"}</Button>
                         </DialogFooter>
                       </DialogContent>
                     </Dialog>
@@ -480,7 +683,7 @@ export default function AssetDetailPage() {
                         <DialogHeader>
                           <DialogTitle className="text-zinc-100">Reassign Asset</DialogTitle>
                           <DialogDescription className="text-zinc-400">
-                            Currently assigned to: {asset.assignedTo}
+                            Currently assigned to: {assignedToDisplay}
                           </DialogDescription>
                         </DialogHeader>
                         <div className="grid gap-4 py-4">
@@ -495,7 +698,7 @@ export default function AssetDetailPage() {
                         </div>
                         <DialogFooter>
                           <Button variant="outline" onClick={() => setReassignDialogOpen(false)} className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">Cancel</Button>
-                          <Button onClick={() => { console.log("Reassigning to:", { reassignTo, reassignDept }); setReassignDialogOpen(false); setReassignTo(""); setReassignDept(""); }}>Reassign</Button>
+                          <Button onClick={handleReassign} disabled={saving}>{saving ? "Reassigning..." : "Reassign"}</Button>
                         </DialogFooter>
                       </DialogContent>
                     </Dialog>
@@ -523,7 +726,7 @@ export default function AssetDetailPage() {
                         </div>
                         <DialogFooter>
                           <Button variant="outline" onClick={() => setRetireDialogOpen(false)} className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">Cancel</Button>
-                          <Button variant="destructive" onClick={() => { console.log("Retiring asset:", asset.id); setRetireDialogOpen(false); }}>Confirm Retire</Button>
+                          <Button variant="destructive" onClick={handleRetire} disabled={saving}>{saving ? "Retiring..." : "Confirm Retire"}</Button>
                         </DialogFooter>
                       </DialogContent>
                     </Dialog>

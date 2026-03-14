@@ -8,6 +8,7 @@ import {
   Clock,
   Plus,
   MoreHorizontal,
+  Loader2,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -45,35 +46,47 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
+import { useApi } from "@/frontend/hooks/use-api";
+import {
+  getLicenses,
+  createLicense,
+  updateLicense,
+  deleteLicense,
+} from "@/frontend/api/endpoints/licenses.api";
+import { getSoftware } from "@/frontend/api/endpoints/software.api";
 
-type LicenseType = "Volume" | "Per-seat" | "Subscription" | "OEM";
+type LicenseType = "Volume" | "PerSeat" | "Subscription" | "OEM";
 
 interface LicenseItem {
-  software: string;
+  id: string;
+  softwareId: string;
+  software: { id: string; name: string };
   licenseType: LicenseType;
   totalLicenses: number;
   inUse: number;
   available: number;
   compliancePct: number;
-  expiryDate: string;
+  expiryDate: string | null;
+  createdAt: string;
 }
 
-const initialLicenseData: LicenseItem[] = [
-  { software: "Microsoft Office 365", licenseType: "Subscription", totalLicenses: 300, inUse: 245, available: 55, compliancePct: 82, expiryDate: "2026-12-31" },
-  { software: "Adobe Creative Suite", licenseType: "Per-seat", totalLicenses: 50, inUse: 48, available: 2, compliancePct: 96, expiryDate: "2026-09-15" },
-  { software: "AutoCAD 2024", licenseType: "Volume", totalLicenses: 20, inUse: 15, available: 5, compliancePct: 75, expiryDate: "2027-03-01" },
-  { software: "Slack Business+", licenseType: "Subscription", totalLicenses: 200, inUse: 198, available: 2, compliancePct: 99, expiryDate: "2026-06-30" },
-  { software: "Zoom Workplace", licenseType: "Subscription", totalLicenses: 300, inUse: 276, available: 24, compliancePct: 92, expiryDate: "2026-08-15" },
-  { software: "Windows 11 Pro", licenseType: "OEM", totalLicenses: 500, inUse: 487, available: 13, compliancePct: 97, expiryDate: "Perpetual" },
-  { software: "Norton 360", licenseType: "Volume", totalLicenses: 200, inUse: 189, available: 11, compliancePct: 95, expiryDate: "2026-04-20" },
-  { software: "Postman Enterprise", licenseType: "Per-seat", totalLicenses: 30, inUse: 42, available: -12, compliancePct: 40, expiryDate: "2026-11-01" },
-];
+interface SoftwareOption {
+  id: string;
+  name: string;
+}
+
+const licenseTypeLabels: Record<LicenseType, string> = {
+  Volume: "Volume",
+  PerSeat: "Per Seat",
+  Subscription: "Subscription",
+  OEM: "OEM",
+};
 
 function typeBadgeClass(type: LicenseType) {
   switch (type) {
     case "Volume":
       return "bg-purple-500/15 text-purple-400 border-purple-500/30";
-    case "Per-seat":
+    case "PerSeat":
       return "bg-blue-500/15 text-blue-400 border-blue-500/30";
     case "Subscription":
       return "bg-cyan-500/15 text-cyan-400 border-cyan-500/30";
@@ -88,11 +101,42 @@ function complianceFillColor(pct: number) {
   return "bg-red-500";
 }
 
+function formatExpiryDate(date: string | null): string {
+  if (!date) return "Perpetual";
+  try {
+    return new Date(date).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  } catch {
+    return date;
+  }
+}
+
+function toDateInputValue(iso: string | null): string {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toISOString().split("T")[0];
+  } catch {
+    return "";
+  }
+}
+
 export default function LicensesPage() {
-  const [licenses, setLicenses] = useState<LicenseItem[]>(initialLicenseData);
+  const { data: licenses, loading, error, refetch } = useApi<LicenseItem[]>(
+    () => getLicenses(),
+    []
+  );
+  const { data: softwareList } = useApi<SoftwareOption[]>(
+    () => getSoftware(),
+    []
+  );
+
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({
-    software: "",
+    softwareId: "",
     licenseType: "Volume" as LicenseType,
     totalLicenses: "",
     expiryDate: "",
@@ -100,100 +144,142 @@ export default function LicensesPage() {
 
   // Edit License dialog
   const [editOpen, setEditOpen] = useState(false);
+  const [editId, setEditId] = useState("");
   const [editData, setEditData] = useState({
-    software: "",
+    softwareName: "",
     licenseType: "Volume" as LicenseType,
     totalLicenses: "",
     expiryDate: "",
   });
-  const [editOriginalName, setEditOriginalName] = useState("");
 
   // Renew dialog
   const [renewOpen, setRenewOpen] = useState(false);
+  const [renewId, setRenewId] = useState("");
   const [renewName, setRenewName] = useState("");
   const [renewDate, setRenewDate] = useState("");
 
   // Remove dialog
   const [removeOpen, setRemoveOpen] = useState(false);
+  const [removeId, setRemoveId] = useState("");
   const [removeName, setRemoveName] = useState("");
 
+  const items = licenses || [];
+  const swOptions = softwareList || [];
+
   const stats = [
-    { label: "Total Licenses", value: String(licenses.length), icon: KeyRound, color: "bg-blue-500" },
-    { label: "Compliant", value: String(licenses.filter((l) => l.compliancePct >= 80).length), icon: ShieldCheck, color: "bg-green-500" },
-    { label: "Over-allocated", value: String(licenses.filter((l) => l.available < 0).length), icon: AlertTriangle, color: "bg-red-500" },
-    { label: "Expiring Soon", value: String(licenses.filter((l) => { if (l.expiryDate === "Perpetual") return false; const d = new Date(l.expiryDate); const now = new Date(); const diff = (d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24); return diff <= 90 && diff > 0; }).length), icon: Clock, color: "bg-amber-500" },
+    { label: "Total Licenses", value: String(items.length), icon: KeyRound, color: "bg-blue-500" },
+    { label: "Compliant", value: String(items.filter((l) => l.compliancePct >= 80).length), icon: ShieldCheck, color: "bg-green-500" },
+    { label: "Over-allocated", value: String(items.filter((l) => l.available < 0).length), icon: AlertTriangle, color: "bg-red-500" },
+    { label: "Expiring Soon", value: String(items.filter((l) => { if (!l.expiryDate) return false; const d = new Date(l.expiryDate); const now = new Date(); const diff = (d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24); return diff <= 90 && diff > 0; }).length), icon: Clock, color: "bg-amber-500" },
   ];
 
-  function handleSubmit() {
-    if (!formData.software.trim()) return;
-    const total = parseInt(formData.totalLicenses) || 0;
-    const newLic: LicenseItem = {
-      software: formData.software.trim(),
-      licenseType: formData.licenseType,
-      totalLicenses: total,
-      inUse: 0,
-      available: total,
-      compliancePct: 100,
-      expiryDate: formData.expiryDate || "Perpetual",
-    };
-    setLicenses((prev) => [...prev, newLic]);
-    setDialogOpen(false);
-    setFormData({ software: "", licenseType: "Volume", totalLicenses: "", expiryDate: "" });
+  async function handleSubmit() {
+    if (!formData.softwareId) return;
+    setSubmitting(true);
+    try {
+      await createLicense({
+        softwareId: formData.softwareId,
+        licenseType: formData.licenseType,
+        totalLicenses: parseInt(formData.totalLicenses) || 0,
+        expiryDate: formData.expiryDate || null,
+      });
+      setDialogOpen(false);
+      setFormData({ softwareId: "", licenseType: "Volume", totalLicenses: "", expiryDate: "" });
+      await refetch();
+    } catch {
+      // silent
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function handleEditLicense(lic: LicenseItem) {
-    setEditOriginalName(lic.software);
+    setEditId(lic.id);
     setEditData({
-      software: lic.software,
+      softwareName: lic.software.name,
       licenseType: lic.licenseType,
       totalLicenses: String(lic.totalLicenses),
-      expiryDate: lic.expiryDate === "Perpetual" ? "" : lic.expiryDate,
+      expiryDate: toDateInputValue(lic.expiryDate),
     });
     setEditOpen(true);
   }
 
-  function handleSaveEdit() {
-    const total = parseInt(editData.totalLicenses) || 0;
-    setLicenses((prev) =>
-      prev.map((l) => {
-        if (l.software !== editOriginalName) return l;
-        const available = total - l.inUse;
-        return {
-          ...l,
-          software: editData.software.trim() || l.software,
-          licenseType: editData.licenseType,
-          totalLicenses: total,
-          available,
-          compliancePct: total > 0 ? Math.round(Math.min((l.inUse / total) * 100, 100)) : 0,
-          expiryDate: editData.expiryDate || "Perpetual",
-        };
-      })
-    );
-    setEditOpen(false);
+  async function handleSaveEdit() {
+    setSubmitting(true);
+    try {
+      await updateLicense(editId, {
+        licenseType: editData.licenseType,
+        totalLicenses: parseInt(editData.totalLicenses) || 0,
+        expiryDate: editData.expiryDate || null,
+      });
+      setEditOpen(false);
+      await refetch();
+    } catch {
+      // silent
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function handleRenew(lic: LicenseItem) {
-    setRenewName(lic.software);
+    setRenewId(lic.id);
+    setRenewName(lic.software.name);
     setRenewDate("");
     setRenewOpen(true);
   }
 
-  function handleSaveRenew() {
+  async function handleSaveRenew() {
     if (!renewDate) return;
-    setLicenses((prev) =>
-      prev.map((l) => (l.software === renewName ? { ...l, expiryDate: renewDate } : l))
-    );
-    setRenewOpen(false);
+    setSubmitting(true);
+    try {
+      await updateLicense(renewId, { expiryDate: renewDate });
+      setRenewOpen(false);
+      await refetch();
+    } catch {
+      // silent
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function handleRemove(lic: LicenseItem) {
-    setRemoveName(lic.software);
+    setRemoveId(lic.id);
+    setRemoveName(lic.software.name);
     setRemoveOpen(true);
   }
 
-  function confirmRemove() {
-    setLicenses((prev) => prev.filter((l) => l.software !== removeName));
-    setRemoveOpen(false);
+  async function confirmRemove() {
+    setSubmitting(true);
+    try {
+      await deleteLicense(removeId);
+      setRemoveOpen(false);
+      await refetch();
+    } catch {
+      // silent
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-zinc-400" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <p className="text-red-400">{error}</p>
+          <Button variant="outline" onClick={refetch} className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -220,13 +306,22 @@ export default function LicensesPage() {
             </DialogHeader>
             <div className="space-y-4 py-2">
               <div className="space-y-2">
-                <Label className="text-zinc-300">Software Name</Label>
-                <Input
-                  placeholder="e.g. Microsoft Office 365"
-                  value={formData.software}
-                  onChange={(e) => setFormData({ ...formData, software: e.target.value })}
-                  className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
-                />
+                <Label className="text-zinc-300">Software</Label>
+                <Select
+                  value={formData.softwareId}
+                  onValueChange={(val) => setFormData({ ...formData, softwareId: val ?? "" })}
+                >
+                  <SelectTrigger className="w-full bg-zinc-800 border-zinc-700 text-zinc-100">
+                    <SelectValue placeholder="Select software" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-zinc-900 border-zinc-800">
+                    {swOptions.map((sw) => (
+                      <SelectItem key={sw.id} value={sw.id}>
+                        {sw.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label className="text-zinc-300">License Type</Label>
@@ -239,7 +334,7 @@ export default function LicensesPage() {
                   </SelectTrigger>
                   <SelectContent className="bg-zinc-900 border-zinc-800">
                     <SelectItem value="Volume">Volume</SelectItem>
-                    <SelectItem value="Per-seat">Per-seat</SelectItem>
+                    <SelectItem value="PerSeat">Per Seat</SelectItem>
                     <SelectItem value="Subscription">Subscription</SelectItem>
                     <SelectItem value="OEM">OEM</SelectItem>
                   </SelectContent>
@@ -269,7 +364,10 @@ export default function LicensesPage() {
               <Button variant="outline" onClick={() => setDialogOpen(false)} className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">
                 Cancel
               </Button>
-              <Button onClick={handleSubmit}>Add License</Button>
+              <Button onClick={handleSubmit} disabled={submitting}>
+                {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Add License
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -309,12 +407,12 @@ export default function LicensesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {licenses.map((lic) => (
-                <TableRow key={lic.software} className="border-zinc-800 hover:bg-zinc-800/50">
-                  <TableCell className="font-medium text-zinc-100">{lic.software}</TableCell>
+              {items.map((lic) => (
+                <TableRow key={lic.id} className="border-zinc-800 hover:bg-zinc-800/50">
+                  <TableCell className="font-medium text-zinc-100">{lic.software.name}</TableCell>
                   <TableCell>
                     <Badge className={typeBadgeClass(lic.licenseType)}>
-                      {lic.licenseType}
+                      {licenseTypeLabels[lic.licenseType]}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right text-zinc-400">{lic.totalLicenses}</TableCell>
@@ -333,7 +431,7 @@ export default function LicensesPage() {
                       <span className="text-xs font-medium text-zinc-400">{lic.compliancePct}%</span>
                     </div>
                   </TableCell>
-                  <TableCell className="text-zinc-400">{lic.expiryDate}</TableCell>
+                  <TableCell className="text-zinc-400">{formatExpiryDate(lic.expiryDate)}</TableCell>
                   <TableCell>
                     <DropdownMenu>
                       <DropdownMenuTrigger
@@ -369,15 +467,15 @@ export default function LicensesPage() {
         <DialogContent className="sm:max-w-md bg-zinc-900 border-zinc-800">
           <DialogHeader>
             <DialogTitle className="text-zinc-50">Edit License</DialogTitle>
-            <DialogDescription>Update license details for {editOriginalName}.</DialogDescription>
+            <DialogDescription>Update license details for {editData.softwareName}.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-2">
               <Label className="text-zinc-300">Software Name</Label>
               <Input
-                value={editData.software}
-                onChange={(e) => setEditData({ ...editData, software: e.target.value })}
-                className="bg-zinc-800 border-zinc-700 text-zinc-100"
+                value={editData.softwareName}
+                disabled
+                className="bg-zinc-800 border-zinc-700 text-zinc-100 opacity-60"
               />
             </div>
             <div className="space-y-2">
@@ -388,7 +486,7 @@ export default function LicensesPage() {
                 </SelectTrigger>
                 <SelectContent className="bg-zinc-900 border-zinc-800">
                   <SelectItem value="Volume">Volume</SelectItem>
-                  <SelectItem value="Per-seat">Per-seat</SelectItem>
+                  <SelectItem value="PerSeat">Per Seat</SelectItem>
                   <SelectItem value="Subscription">Subscription</SelectItem>
                   <SelectItem value="OEM">OEM</SelectItem>
                 </SelectContent>
@@ -415,7 +513,10 @@ export default function LicensesPage() {
           </div>
           <DialogFooter className="bg-zinc-900 border-zinc-800">
             <Button variant="outline" onClick={() => setEditOpen(false)} className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">Cancel</Button>
-            <Button onClick={handleSaveEdit}>Save Changes</Button>
+            <Button onClick={handleSaveEdit} disabled={submitting}>
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Save Changes
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -440,7 +541,10 @@ export default function LicensesPage() {
           </div>
           <DialogFooter className="bg-zinc-900 border-zinc-800">
             <Button variant="outline" onClick={() => setRenewOpen(false)} className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">Cancel</Button>
-            <Button onClick={handleSaveRenew}>Renew License</Button>
+            <Button onClick={handleSaveRenew} disabled={submitting}>
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Renew License
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -459,7 +563,10 @@ export default function LicensesPage() {
           </div>
           <DialogFooter className="bg-zinc-900 border-zinc-800">
             <Button variant="outline" onClick={() => setRemoveOpen(false)} className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">Cancel</Button>
-            <Button variant="destructive" onClick={confirmRemove}>Remove License</Button>
+            <Button variant="destructive" onClick={confirmRemove} disabled={submitting}>
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Remove License
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

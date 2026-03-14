@@ -1,25 +1,30 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect } from "react";
 import Sidebar from "@/components/sidebar";
 import Header from "@/components/header";
+import { useAppStore } from "@/frontend/store/app.store";
+import { useAuth } from "@/frontend/hooks/use-auth";
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const [collapsed, setCollapsed] = useState(false);
+  const { sidebarCollapsed, toggleSidebar } = useAppStore();
+  const { checkAuth } = useAuth();
 
-  const toggleSidebar = () => setCollapsed((prev) => !prev);
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
 
   return (
     <div className="flex h-screen overflow-hidden bg-zinc-950">
-      <Sidebar collapsed={collapsed} onToggle={toggleSidebar} />
+      <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
       <div
         className="flex flex-1 flex-col overflow-hidden transition-all duration-300"
         style={{
-          marginLeft: collapsed
+          marginLeft: sidebarCollapsed
             ? "var(--sidebar-collapsed)"
             : "var(--sidebar-width)",
         }}

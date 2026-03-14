@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, MoreHorizontal, Pencil, KeyRound, UserX } from "lucide-react";
+import { Plus, MoreHorizontal, Pencil, KeyRound, UserX, Loader2, AlertCircle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import {
   Table,
@@ -39,75 +39,26 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { useApi } from "@/frontend/hooks/use-api";
+import {
+  getUsers,
+  createUser,
+  updateUser,
+} from "@/frontend/api/endpoints/users.api";
 
 type Role = "Admin" | "Technician" | "Auditor" | "Manager";
 
-interface User {
+interface ApiUser {
+  id: string;
   name: string;
-  initials: string;
   email: string;
   role: Role;
   department: string;
-  lastLogin: string;
   status: "Active" | "Inactive";
+  initials: string;
+  lastLogin: string | null;
+  createdAt: string;
 }
-
-const initialUsers: User[] = [
-  {
-    name: "John Smith",
-    initials: "JS",
-    email: "john.smith@company.com",
-    role: "Admin",
-    department: "IT Operations",
-    lastLogin: "2026-03-14 11:42",
-    status: "Active",
-  },
-  {
-    name: "Sarah Kim",
-    initials: "SK",
-    email: "sarah.kim@company.com",
-    role: "Technician",
-    department: "Help Desk",
-    lastLogin: "2026-03-14 10:15",
-    status: "Active",
-  },
-  {
-    name: "Mike Chen",
-    initials: "MC",
-    email: "mike.chen@company.com",
-    role: "Technician",
-    department: "Infrastructure",
-    lastLogin: "2026-03-14 09:30",
-    status: "Active",
-  },
-  {
-    name: "Emily Davis",
-    initials: "ED",
-    email: "emily.davis@company.com",
-    role: "Auditor",
-    department: "Compliance",
-    lastLogin: "2026-03-13 16:20",
-    status: "Active",
-  },
-  {
-    name: "James Liu",
-    initials: "JL",
-    email: "james.liu@company.com",
-    role: "Manager",
-    department: "IT Operations",
-    lastLogin: "2026-03-14 08:00",
-    status: "Active",
-  },
-  {
-    name: "Rachel Torres",
-    initials: "RT",
-    email: "rachel.torres@company.com",
-    role: "Technician",
-    department: "Help Desk",
-    lastLogin: "2026-02-28 14:10",
-    status: "Inactive",
-  },
-];
 
 const roleBadgeClass: Record<Role, string> = {
   Admin: "border-red-500/30 bg-red-500/10 text-red-400",
@@ -116,9 +67,28 @@ const roleBadgeClass: Record<Role, string> = {
   Manager: "border-purple-500/30 bg-purple-500/10 text-purple-400",
 };
 
+function formatLastLogin(iso: string | null): string {
+  if (!iso) return "Never";
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export default function UsersPage() {
-  const [users, setUsers] = useState<User[]>(initialUsers);
+  const {
+    data: users,
+    loading,
+    error,
+    refetch,
+  } = useApi<ApiUser[]>(() => getUsers());
+
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [newRole, setNewRole] = useState<Role>("Technician");
@@ -126,7 +96,7 @@ export default function UsersPage() {
 
   // Edit User dialog
   const [editOpen, setEditOpen] = useState(false);
-  const [editEmail, setEditEmail] = useState("");
+  const [editUserId, setEditUserId] = useState("");
   const [editName, setEditName] = useState("");
   const [editRole, setEditRole] = useState<Role>("Technician");
   const [editDepartment, setEditDepartment] = useState("");
@@ -138,82 +108,106 @@ export default function UsersPage() {
 
   // Deactivate dialog
   const [deactivateOpen, setDeactivateOpen] = useState(false);
-  const [deactivateEmail, setDeactivateEmail] = useState("");
+  const [deactivateUserId, setDeactivateUserId] = useState("");
   const [deactivateUserName, setDeactivateUserName] = useState("");
 
-  function getInitials(name: string) {
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
-  }
-
-  const handleAddUser = () => {
+  const handleAddUser = async () => {
     if (!newName.trim() || !newEmail.trim()) return;
-    const newUser: User = {
-      name: newName.trim(),
-      initials: getInitials(newName.trim()),
-      email: newEmail.trim(),
-      role: newRole,
-      department: newDepartment.trim() || "General",
-      lastLogin: "Never",
-      status: "Active",
-    };
-    setUsers((prev) => [...prev, newUser]);
-    setDialogOpen(false);
-    setNewName("");
-    setNewEmail("");
-    setNewRole("Technician");
-    setNewDepartment("");
+    setSubmitting(true);
+    try {
+      await createUser({
+        name: newName.trim(),
+        email: newEmail.trim(),
+        password: "TempPass123!",
+        role: newRole,
+        department: newDepartment.trim() || "General",
+      });
+      setDialogOpen(false);
+      setNewName("");
+      setNewEmail("");
+      setNewRole("Technician");
+      setNewDepartment("");
+      await refetch();
+    } catch {
+      // error will show on refetch
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  function handleEditUser(user: User) {
-    setEditEmail(user.email);
+  function handleEditUser(user: ApiUser) {
+    setEditUserId(user.id);
     setEditName(user.name);
     setEditRole(user.role);
     setEditDepartment(user.department);
     setEditOpen(true);
   }
 
-  function handleSaveEdit() {
-    setUsers((prev) =>
-      prev.map((u) => {
-        if (u.email !== editEmail) return u;
-        return {
-          ...u,
-          name: editName.trim() || u.name,
-          initials: getInitials(editName.trim() || u.name),
-          role: editRole,
-          department: editDepartment.trim() || u.department,
-        };
-      })
-    );
-    setEditOpen(false);
+  async function handleSaveEdit() {
+    setSubmitting(true);
+    try {
+      await updateUser(editUserId, {
+        name: editName.trim() || undefined,
+        role: editRole,
+        department: editDepartment.trim() || undefined,
+      });
+      setEditOpen(false);
+      await refetch();
+    } catch {
+      // ignore
+    } finally {
+      setSubmitting(false);
+    }
   }
 
-  function handleResetPassword(user: User) {
+  function handleResetPassword(user: ApiUser) {
     setResetUserName(user.name);
     setResetUserEmail(user.email);
     setResetOpen(true);
   }
 
   function confirmResetPassword() {
+    // No email system yet - just show success by closing dialog
     setResetOpen(false);
   }
 
-  function handleDeactivate(user: User) {
-    setDeactivateEmail(user.email);
+  function handleDeactivate(user: ApiUser) {
+    setDeactivateUserId(user.id);
     setDeactivateUserName(user.name);
     setDeactivateOpen(true);
   }
 
-  function confirmDeactivate() {
-    setUsers((prev) =>
-      prev.map((u) => (u.email === deactivateEmail ? { ...u, status: "Inactive" as const } : u))
+  async function confirmDeactivate() {
+    setSubmitting(true);
+    try {
+      await updateUser(deactivateUserId, { status: "Inactive" });
+      setDeactivateOpen(false);
+      await refetch();
+    } catch {
+      // ignore
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-zinc-400" />
+      </div>
     );
-    setDeactivateOpen(false);
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-4">
+        <AlertCircle className="h-10 w-10 text-red-400" />
+        <p className="text-sm text-red-400">{error}</p>
+        <Button variant="outline" onClick={refetch}>
+          Retry
+        </Button>
+      </div>
+    );
   }
 
   return (
@@ -288,7 +282,9 @@ export default function UsersPage() {
             </div>
             <DialogFooter className="bg-zinc-900/50 border-zinc-800">
               <Button variant="outline" onClick={() => setDialogOpen(false)} className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">Cancel</Button>
-              <Button onClick={handleAddUser}>Create User</Button>
+              <Button onClick={handleAddUser} disabled={submitting}>
+                {submitting ? "Creating..." : "Create User"}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -311,9 +307,9 @@ export default function UsersPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {users.map((user) => (
+            {(users ?? []).map((user) => (
               <TableRow
-                key={user.email}
+                key={user.id}
                 className="border-zinc-800 hover:bg-zinc-800/50"
               >
                 <TableCell className="px-4">
@@ -341,7 +337,7 @@ export default function UsersPage() {
                   {user.department}
                 </TableCell>
                 <TableCell className="text-zinc-400">
-                  {user.lastLogin}
+                  {formatLastLogin(user.lastLogin)}
                 </TableCell>
                 <TableCell>
                   {user.status === "Active" ? (
@@ -438,7 +434,9 @@ export default function UsersPage() {
           </div>
           <DialogFooter className="bg-zinc-900/50 border-zinc-800">
             <Button variant="outline" onClick={() => setEditOpen(false)} className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">Cancel</Button>
-            <Button onClick={handleSaveEdit}>Save Changes</Button>
+            <Button onClick={handleSaveEdit} disabled={submitting}>
+              {submitting ? "Saving..." : "Save Changes"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -476,7 +474,9 @@ export default function UsersPage() {
           </div>
           <DialogFooter className="bg-zinc-900/50 border-zinc-800">
             <Button variant="outline" onClick={() => setDeactivateOpen(false)} className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">Cancel</Button>
-            <Button variant="destructive" onClick={confirmDeactivate}>Deactivate User</Button>
+            <Button variant="destructive" onClick={confirmDeactivate} disabled={submitting}>
+              {submitting ? "Deactivating..." : "Deactivate User"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

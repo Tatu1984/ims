@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import {
   Table,
@@ -23,122 +23,23 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { getAuditLogs } from "@/frontend/api/endpoints/audit-log.api";
 
 type ActionType = "Create" | "Update" | "Delete" | "Login" | "Export";
 
 interface AuditEntry {
-  id: number;
-  timestamp: string;
-  user: string;
-  initials: string;
+  id: string;
   action: ActionType;
   resource: string;
   details: string;
   ipAddress: string;
+  createdAt: string;
+  user: {
+    id: string;
+    name: string;
+    initials: string;
+  };
 }
-
-const auditEntries: AuditEntry[] = [
-  {
-    id: 1,
-    timestamp: "2026-03-14 12:45:02",
-    user: "John Smith",
-    initials: "JS",
-    action: "Create",
-    resource: "Asset #A-1248",
-    details: "Created new workstation asset ws-eng-050",
-    ipAddress: "10.0.1.45",
-  },
-  {
-    id: 2,
-    timestamp: "2026-03-14 12:30:18",
-    user: "Sarah Kim",
-    initials: "SK",
-    action: "Update",
-    resource: "Ticket #TKT-1041",
-    details: "Changed status from Open to In Progress",
-    ipAddress: "10.0.1.22",
-  },
-  {
-    id: 3,
-    timestamp: "2026-03-14 12:15:44",
-    user: "Mike Chen",
-    initials: "MC",
-    action: "Export",
-    resource: "Asset Report",
-    details: "Exported full asset inventory to CSV (1,247 records)",
-    ipAddress: "10.0.1.30",
-  },
-  {
-    id: 4,
-    timestamp: "2026-03-14 11:58:31",
-    user: "James Liu",
-    initials: "JL",
-    action: "Login",
-    resource: "System",
-    details: "Successful login via SSO",
-    ipAddress: "192.168.5.12",
-  },
-  {
-    id: 5,
-    timestamp: "2026-03-14 11:42:09",
-    user: "Emily Davis",
-    initials: "ED",
-    action: "Delete",
-    resource: "License #LIC-089",
-    details: "Removed expired Adobe Creative Suite license",
-    ipAddress: "10.0.1.55",
-  },
-  {
-    id: 6,
-    timestamp: "2026-03-14 11:20:55",
-    user: "John Smith",
-    initials: "JS",
-    action: "Update",
-    resource: "Asset #A-0892",
-    details: "Updated firmware version to v4.2.1 for prn-lobby-01",
-    ipAddress: "10.0.1.45",
-  },
-  {
-    id: 7,
-    timestamp: "2026-03-14 10:50:12",
-    user: "Rachel Torres",
-    initials: "RT",
-    action: "Create",
-    resource: "Ticket #TKT-1042",
-    details: "Created new ticket: Unable to connect to network printer",
-    ipAddress: "192.168.1.100",
-  },
-  {
-    id: 8,
-    timestamp: "2026-03-14 10:35:28",
-    user: "Sarah Kim",
-    initials: "SK",
-    action: "Update",
-    resource: "Patch #P-2026-03",
-    details: "Deployed Windows security patch KB5034441 to 12 endpoints",
-    ipAddress: "10.0.1.22",
-  },
-  {
-    id: 9,
-    timestamp: "2026-03-14 09:15:40",
-    user: "Mike Chen",
-    initials: "MC",
-    action: "Login",
-    resource: "System",
-    details: "Successful login via password",
-    ipAddress: "10.0.1.30",
-  },
-  {
-    id: 10,
-    timestamp: "2026-03-14 08:45:03",
-    user: "James Liu",
-    initials: "JL",
-    action: "Delete",
-    resource: "User rachel.torres",
-    details: "Deactivated user account (role: Technician)",
-    ipAddress: "192.168.5.12",
-  },
-];
 
 const actionBadgeClass: Record<ActionType, string> = {
   Create: "border-green-500/30 bg-green-500/10 text-green-400",
@@ -147,16 +48,6 @@ const actionBadgeClass: Record<ActionType, string> = {
   Login: "border-zinc-500/30 bg-zinc-500/10 text-zinc-400",
   Export: "border-purple-500/30 bg-purple-500/10 text-purple-400",
 };
-
-const allUsers = [
-  "All Users",
-  "John Smith",
-  "Sarah Kim",
-  "Mike Chen",
-  "James Liu",
-  "Emily Davis",
-  "Rachel Torres",
-];
 
 const allActions: Array<"All" | ActionType> = [
   "All",
@@ -167,25 +58,75 @@ const allActions: Array<"All" | ActionType> = [
   "Export",
 ];
 
+const pageSize = 5;
+
 export default function AuditLogPage() {
   const [userFilter, setUserFilter] = useState("All Users");
   const [actionFilter, setActionFilter] = useState<"All" | ActionType>("All");
-  const [dateFrom, setDateFrom] = useState("2026-03-14");
-  const [dateTo, setDateTo] = useState("2026-03-14");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
 
-  const filteredEntries = auditEntries.filter((entry) => {
-    if (userFilter !== "All Users" && entry.user !== userFilter) return false;
-    if (actionFilter !== "All" && entry.action !== actionFilter) return false;
-    return true;
-  });
+  const [entries, setEntries] = useState<AuditEntry[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const pageSize = 5;
-  const totalPages = Math.max(1, Math.ceil(filteredEntries.length / pageSize));
-  const paginatedEntries = filteredEntries.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize
-  );
+  // Collect unique users from fetched entries for the filter dropdown
+  const [knownUsers, setKnownUsers] = useState<string[]>([]);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const params: Record<string, string> = {
+        page: String(currentPage),
+        limit: String(pageSize),
+      };
+      if (userFilter !== "All Users") params.userId = userFilter;
+      if (actionFilter !== "All") params.action = actionFilter;
+      if (dateFrom) params.dateFrom = dateFrom;
+      if (dateTo) params.dateTo = dateTo;
+
+      const res = await getAuditLogs(params) as { success: boolean; data: { data: AuditEntry[]; total: number } };
+      if (res.success) {
+        const data = res.data;
+        setEntries(data.data);
+        setTotal(data.total);
+
+        // Build unique user list for filter
+        const names = data.data.map((e: AuditEntry) => e.user.name);
+        setKnownUsers((prev) => {
+          const combined = new Set([...prev, ...names]);
+          return Array.from(combined).sort();
+        });
+      } else {
+        setError("Failed to load audit logs.");
+      }
+    } catch {
+      setError("Failed to load audit logs.");
+    } finally {
+      setLoading(false);
+    }
+  }, [currentPage, userFilter, actionFilter, dateFrom, dateTo]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  function formatTimestamp(iso: string) {
+    const d = new Date(iso);
+    return d.toLocaleString("sv-SE", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+  }
 
   return (
     <div className="space-y-6">
@@ -205,7 +146,10 @@ export default function AuditLogPage() {
             <Input
               type="date"
               value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
+              onChange={(e) => {
+                setDateFrom(e.target.value);
+                setCurrentPage(1);
+              }}
               className="bg-zinc-800 border-zinc-700 text-zinc-100 w-auto"
             />
           </div>
@@ -214,7 +158,10 @@ export default function AuditLogPage() {
             <Input
               type="date"
               value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
+              onChange={(e) => {
+                setDateTo(e.target.value);
+                setCurrentPage(1);
+              }}
               className="bg-zinc-800 border-zinc-700 text-zinc-100 w-auto"
             />
           </div>
@@ -231,7 +178,8 @@ export default function AuditLogPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="bg-zinc-800 border-zinc-700">
-                {allUsers.map((u) => (
+                <SelectItem value="All Users">All Users</SelectItem>
+                {knownUsers.map((u) => (
                   <SelectItem key={u} value={u}>
                     {u}
                   </SelectItem>
@@ -263,6 +211,16 @@ export default function AuditLogPage() {
         </div>
       </Card>
 
+      {/* Error State */}
+      {error && (
+        <Card className="bg-red-500/10 border-red-500/30 p-4">
+          <p className="text-sm text-red-400">{error}</p>
+          <Button variant="outline" size="sm" className="mt-2" onClick={fetchData}>
+            Retry
+          </Button>
+        </Card>
+      )}
+
       {/* Audit Table */}
       <Card className="bg-zinc-900 border-zinc-800 overflow-hidden">
         <Table>
@@ -277,29 +235,38 @@ export default function AuditLogPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {paginatedEntries.length === 0 ? (
+            {loading ? (
+              <TableRow className="border-zinc-800">
+                <TableCell colSpan={6} className="text-center py-8">
+                  <div className="flex items-center justify-center gap-2 text-zinc-400">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading audit logs...
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : entries.length === 0 ? (
               <TableRow className="border-zinc-800">
                 <TableCell colSpan={6} className="text-center text-zinc-500 py-8">
                   No entries match the current filters.
                 </TableCell>
               </TableRow>
             ) : (
-              paginatedEntries.map((entry) => (
+              entries.map((entry) => (
                 <TableRow
                   key={entry.id}
                   className="border-zinc-800 hover:bg-zinc-800/50"
                 >
                   <TableCell className="px-4 font-mono text-xs text-zinc-400">
-                    {entry.timestamp}
+                    {formatTimestamp(entry.createdAt)}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Avatar size="sm">
                         <AvatarFallback className="bg-zinc-700 text-zinc-300 text-[10px]">
-                          {entry.initials}
+                          {entry.user.initials}
                         </AvatarFallback>
                       </Avatar>
-                      <span className="text-zinc-200">{entry.user}</span>
+                      <span className="text-zinc-200">{entry.user.name}</span>
                     </div>
                   </TableCell>
                   <TableCell>
@@ -330,17 +297,15 @@ export default function AuditLogPage() {
           <p className="text-sm text-zinc-400">
             Showing{" "}
             <span className="font-medium text-zinc-200">
-              {filteredEntries.length === 0
-                ? 0
-                : (currentPage - 1) * pageSize + 1}
+              {total === 0 ? 0 : (currentPage - 1) * pageSize + 1}
             </span>{" "}
             to{" "}
             <span className="font-medium text-zinc-200">
-              {Math.min(currentPage * pageSize, filteredEntries.length)}
+              {Math.min(currentPage * pageSize, total)}
             </span>{" "}
             of{" "}
             <span className="font-medium text-zinc-200">
-              {filteredEntries.length}
+              {total}
             </span>{" "}
             entries
           </p>
