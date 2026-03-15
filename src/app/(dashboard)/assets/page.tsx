@@ -161,7 +161,11 @@ export default function AssetsPage() {
   const [newSerial, setNewSerial] = useState("");
   const [newAssignedTo, setNewAssignedTo] = useState("");
   const [newDepartment, setNewDepartment] = useState("");
+  const [newLocation, setNewLocation] = useState("");
   const [newPurchaseDate, setNewPurchaseDate] = useState("");
+  const [newPurchaseCost, setNewPurchaseCost] = useState("");
+  const [newWarrantyExpiry, setNewWarrantyExpiry] = useState("");
+  const [newNotes, setNewNotes] = useState("");
 
   // Edit Asset dialog
   const [editOpen, setEditOpen] = useState(false);
@@ -192,7 +196,11 @@ export default function AssetsPage() {
         serialNumber: newSerial.trim() || undefined,
         assignedToName: newAssignedTo.trim() || undefined,
         department: newDepartment.trim() || undefined,
+        location: newLocation.trim() || undefined,
         purchaseDate: newPurchaseDate || undefined,
+        purchaseCost: newPurchaseCost ? parseFloat(newPurchaseCost) : undefined,
+        warrantyExpiry: newWarrantyExpiry || undefined,
+        notes: newNotes.trim() || undefined,
       });
       setAddDialogOpen(false);
       setNewName("");
@@ -200,7 +208,11 @@ export default function AssetsPage() {
       setNewSerial("");
       setNewAssignedTo("");
       setNewDepartment("");
+      setNewLocation("");
       setNewPurchaseDate("");
+      setNewPurchaseCost("");
+      setNewWarrantyExpiry("");
+      setNewNotes("");
       await refetch();
     } catch {
       // Error handling could be enhanced with toast notifications
@@ -338,7 +350,7 @@ export default function AssetsPage() {
               <Plus className="h-4 w-4" />
               Add Asset
             </DialogTrigger>
-            <DialogContent className="bg-zinc-900 border-zinc-800 sm:max-w-md">
+            <DialogContent className="bg-zinc-900 border-zinc-800 sm:max-w-lg max-h-[85vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle className="text-zinc-100">Add New Asset</DialogTitle>
                 <DialogDescription className="text-zinc-400">
@@ -346,29 +358,31 @@ export default function AssetsPage() {
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
-                  <Label className="text-zinc-300">Name</Label>
-                  <Input
-                    placeholder="e.g. Dell Latitude 7450"
-                    value={newName}
-                    onChange={(e) => setNewName(e.target.value)}
-                    className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label className="text-zinc-300">Type</Label>
-                  <Select value={newType} onValueChange={(val) => setNewType(val as AssetType)}>
-                    <SelectTrigger className="bg-zinc-800 border-zinc-700 text-zinc-100 w-full">
-                      <SelectValue placeholder="Select type" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-zinc-800 border-zinc-700">
-                      <SelectItem value="desktop">Desktop</SelectItem>
-                      <SelectItem value="laptop">Laptop</SelectItem>
-                      <SelectItem value="server">Server</SelectItem>
-                      <SelectItem value="printer">Printer</SelectItem>
-                      <SelectItem value="peripheral">Peripheral</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label className="text-zinc-300">Name <span className="text-red-400">*</span></Label>
+                    <Input
+                      placeholder="e.g. Dell Latitude 7450"
+                      value={newName}
+                      onChange={(e) => setNewName(e.target.value)}
+                      className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label className="text-zinc-300">Type <span className="text-red-400">*</span></Label>
+                    <Select value={newType} onValueChange={(val) => setNewType(val as AssetType)}>
+                      <SelectTrigger className="bg-zinc-800 border-zinc-700 text-zinc-100 w-full">
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-zinc-800 border-zinc-700">
+                        <SelectItem value="desktop">Desktop</SelectItem>
+                        <SelectItem value="laptop">Laptop</SelectItem>
+                        <SelectItem value="server">Server</SelectItem>
+                        <SelectItem value="printer">Printer</SelectItem>
+                        <SelectItem value="peripheral">Peripheral</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
                 <div className="grid gap-2">
                   <Label className="text-zinc-300">Serial Number</Label>
@@ -400,12 +414,53 @@ export default function AssetsPage() {
                   </div>
                 </div>
                 <div className="grid gap-2">
-                  <Label className="text-zinc-300">Purchase Date</Label>
+                  <Label className="text-zinc-300">Location</Label>
                   <Input
-                    type="date"
-                    value={newPurchaseDate}
-                    onChange={(e) => setNewPurchaseDate(e.target.value)}
-                    className="bg-zinc-800 border-zinc-700 text-zinc-100"
+                    placeholder="e.g. Building A, Floor 3, Desk 12"
+                    value={newLocation}
+                    onChange={(e) => setNewLocation(e.target.value)}
+                    className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="grid gap-2">
+                    <Label className="text-zinc-300">Purchase Date</Label>
+                    <Input
+                      type="date"
+                      value={newPurchaseDate}
+                      onChange={(e) => setNewPurchaseDate(e.target.value)}
+                      className="bg-zinc-800 border-zinc-700 text-zinc-100"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label className="text-zinc-300">Purchase Cost</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="e.g. 1299.99"
+                      value={newPurchaseCost}
+                      onChange={(e) => setNewPurchaseCost(e.target.value)}
+                      className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label className="text-zinc-300">Warranty Expiry</Label>
+                    <Input
+                      type="date"
+                      value={newWarrantyExpiry}
+                      onChange={(e) => setNewWarrantyExpiry(e.target.value)}
+                      className="bg-zinc-800 border-zinc-700 text-zinc-100"
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-2">
+                  <Label className="text-zinc-300">Notes</Label>
+                  <Textarea
+                    placeholder="Any additional notes about this asset..."
+                    value={newNotes}
+                    onChange={(e) => setNewNotes(e.target.value)}
+                    className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500 min-h-[80px]"
                   />
                 </div>
               </div>
