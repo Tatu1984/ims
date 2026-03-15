@@ -77,22 +77,33 @@ interface AssetDetail {
   purchaseCost?: number | string | null;
   warrantyExpiry?: string | null;
   notes?: string | null;
+  processor?: string | null;
+  ramSize?: string | null;
+  ramType?: string | null;
+  storageSize?: string | null;
+  storageType?: string | null;
+  gpu?: string | null;
+  displaySize?: string | null;
+  displayRes?: string | null;
+  os?: string | null;
+  macAddress?: string | null;
+  ipAddress?: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
-// Static mock data (would need separate APIs)
-const hardwareComponents = [
-  { component: "Processor", spec: "Intel Core Ultra 7 155H", details: "16 cores / 22 threads, up to 4.8 GHz", status: "OK" },
-  { component: "Memory Module 1", spec: "16 GB DDR5-5600 SODIMM", details: "Samsung M425R2GA3BB0-CQKOL", status: "OK" },
-  { component: "Memory Module 2", spec: "16 GB DDR5-5600 SODIMM", details: "Samsung M425R2GA3BB0-CQKOL", status: "OK" },
-  { component: "Storage (NVMe)", spec: "1 TB Samsung 990 Pro", details: "PCIe 4.0 x4, M.2 2280", status: "OK" },
-  { component: "Display", spec: '14.0" FHD+ IPS', details: "1920x1200, 60Hz, 300 nits", status: "OK" },
-  { component: "Network (WiFi)", spec: "Intel Wi-Fi 6E AX211", details: "2x2, 802.11ax, Bluetooth 5.3", status: "OK" },
-  { component: "Network (Ethernet)", spec: "Intel I219-LM", details: "1 GbE", status: "OK" },
-  { component: "Battery", spec: "57 Whr, 4-cell", details: "Polymer, integrated", status: "Good - 94% health" },
-  { component: "Graphics", spec: "Intel Arc Graphics", details: "Integrated", status: "OK" },
-];
+function buildHardwareComponents(asset: AssetDetail) {
+  const components: { component: string; spec: string }[] = [];
+  if (asset.processor) components.push({ component: "Processor (CPU)", spec: asset.processor });
+  if (asset.ramSize) components.push({ component: "Memory (RAM)", spec: `${asset.ramSize}${asset.ramType ? ` ${asset.ramType}` : ""}` });
+  if (asset.storageSize) components.push({ component: "Storage", spec: `${asset.storageSize}${asset.storageType ? ` ${asset.storageType}` : ""}` });
+  if (asset.gpu) components.push({ component: "Graphics (GPU)", spec: asset.gpu });
+  if (asset.displaySize) components.push({ component: "Display", spec: `${asset.displaySize}${asset.displayRes ? ` (${asset.displayRes})` : ""}` });
+  if (asset.os) components.push({ component: "Operating System", spec: asset.os });
+  if (asset.macAddress) components.push({ component: "MAC Address", spec: asset.macAddress });
+  if (asset.ipAddress) components.push({ component: "IP Address", spec: asset.ipAddress });
+  return components;
+}
 
 const softwareList = [
   { name: "Windows 11 Pro", version: "24H2 (26100.3194)", publisher: "Microsoft", license: "Volume License", installDate: "Jan 15, 2025" },
@@ -549,39 +560,90 @@ export default function AssetDetailPage() {
                 </CardContent>
               </Card>
 
-              {/* Hardware Specs Card (static mock) */}
+              {/* Hardware Specs Card */}
+              {(asset.processor || asset.ramSize || asset.storageSize || asset.gpu || asset.displaySize || asset.os || asset.macAddress || asset.ipAddress) && (
               <Card className="bg-zinc-900 border-zinc-800">
                 <CardHeader>
                   <CardTitle className="text-zinc-100">Hardware Specifications</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-5">
-                    <div className="flex items-center gap-2 text-sm">
-                      <Cpu className="h-4 w-4 text-zinc-500" />
-                      <span className="font-medium text-zinc-400">Processor:</span>
-                      <span className="text-zinc-100">Intel Core Ultra 7 155H</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      <MemoryStick className="h-4 w-4 text-zinc-500" />
-                      <span className="font-medium text-zinc-400">Memory:</span>
-                      <span className="text-zinc-100">32 GB DDR5-5600</span>
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2 text-sm mb-3">
-                        <HardDrive className="h-4 w-4 text-zinc-500" />
-                        <span className="font-medium text-zinc-400">Storage:</span>
-                        <span className="text-zinc-100">1 TB NVMe SSD (Samsung 990 Pro)</span>
+                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                    {asset.processor && (
+                      <div className="flex items-start gap-3">
+                        <Cpu className="mt-0.5 h-5 w-5 text-zinc-500" />
+                        <div>
+                          <p className="text-xs font-medium uppercase text-zinc-500">Processor</p>
+                          <p className="text-sm text-zinc-100">{asset.processor}</p>
+                        </div>
                       </div>
-                      <ProgressBar
-                        value={470}
-                        max={1000}
-                        label="Disk Usage"
-                        unit="GB"
-                      />
-                    </div>
+                    )}
+                    {asset.ramSize && (
+                      <div className="flex items-start gap-3">
+                        <MemoryStick className="mt-0.5 h-5 w-5 text-zinc-500" />
+                        <div>
+                          <p className="text-xs font-medium uppercase text-zinc-500">Memory (RAM)</p>
+                          <p className="text-sm text-zinc-100">{asset.ramSize}{asset.ramType ? ` ${asset.ramType}` : ""}</p>
+                        </div>
+                      </div>
+                    )}
+                    {asset.storageSize && (
+                      <div className="flex items-start gap-3">
+                        <HardDrive className="mt-0.5 h-5 w-5 text-zinc-500" />
+                        <div>
+                          <p className="text-xs font-medium uppercase text-zinc-500">Storage</p>
+                          <p className="text-sm text-zinc-100">{asset.storageSize}{asset.storageType ? ` ${asset.storageType}` : ""}</p>
+                        </div>
+                      </div>
+                    )}
+                    {asset.gpu && (
+                      <div className="flex items-start gap-3">
+                        <Monitor className="mt-0.5 h-5 w-5 text-zinc-500" />
+                        <div>
+                          <p className="text-xs font-medium uppercase text-zinc-500">Graphics (GPU)</p>
+                          <p className="text-sm text-zinc-100">{asset.gpu}</p>
+                        </div>
+                      </div>
+                    )}
+                    {asset.displaySize && (
+                      <div className="flex items-start gap-3">
+                        <Monitor className="mt-0.5 h-5 w-5 text-zinc-500" />
+                        <div>
+                          <p className="text-xs font-medium uppercase text-zinc-500">Display</p>
+                          <p className="text-sm text-zinc-100">{asset.displaySize}{asset.displayRes ? ` (${asset.displayRes})` : ""}</p>
+                        </div>
+                      </div>
+                    )}
+                    {asset.os && (
+                      <div className="flex items-start gap-3">
+                        <Package className="mt-0.5 h-5 w-5 text-zinc-500" />
+                        <div>
+                          <p className="text-xs font-medium uppercase text-zinc-500">Operating System</p>
+                          <p className="text-sm text-zinc-100">{asset.os}</p>
+                        </div>
+                      </div>
+                    )}
+                    {asset.macAddress && (
+                      <div className="flex items-start gap-3">
+                        <Hash className="mt-0.5 h-5 w-5 text-zinc-500" />
+                        <div>
+                          <p className="text-xs font-medium uppercase text-zinc-500">MAC Address</p>
+                          <p className="text-sm font-mono text-zinc-100">{asset.macAddress}</p>
+                        </div>
+                      </div>
+                    )}
+                    {asset.ipAddress && (
+                      <div className="flex items-start gap-3">
+                        <MapPin className="mt-0.5 h-5 w-5 text-zinc-500" />
+                        <div>
+                          <p className="text-xs font-medium uppercase text-zinc-500">IP Address</p>
+                          <p className="text-sm font-mono text-zinc-100">{asset.ipAddress}</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
+              )}
             </div>
 
             {/* Right Column - 1/3 */}
@@ -773,30 +835,28 @@ export default function AssetDetailPage() {
               <CardTitle className="text-zinc-100">Hardware Components</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
+              {buildHardwareComponents(asset).length === 0 ? (
+                <div className="p-6 text-center text-sm text-zinc-500">
+                  No hardware specifications have been recorded for this asset.
+                </div>
+              ) : (
               <Table>
                 <TableHeader>
                   <TableRow className="border-zinc-800 hover:bg-transparent">
                     <TableHead className="text-zinc-400 text-xs font-semibold uppercase tracking-wider">Component</TableHead>
                     <TableHead className="text-zinc-400 text-xs font-semibold uppercase tracking-wider">Specification</TableHead>
-                    <TableHead className="text-zinc-400 text-xs font-semibold uppercase tracking-wider">Details</TableHead>
-                    <TableHead className="text-zinc-400 text-xs font-semibold uppercase tracking-wider">Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {hardwareComponents.map((hw, i) => (
+                  {buildHardwareComponents(asset).map((hw, i) => (
                     <TableRow key={i} className="border-zinc-800 hover:bg-zinc-800/60">
                       <TableCell className="text-sm font-medium text-zinc-100">{hw.component}</TableCell>
                       <TableCell className="text-sm text-zinc-300">{hw.spec}</TableCell>
-                      <TableCell className="text-sm text-zinc-400">{hw.details}</TableCell>
-                      <TableCell>
-                        <Badge className={hw.status === "OK" ? "bg-green-500/15 text-green-400" : "bg-amber-500/15 text-amber-400"}>
-                          {hw.status}
-                        </Badge>
-                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

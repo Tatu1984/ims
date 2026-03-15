@@ -26,6 +26,17 @@ export async function create(data: {
   purchaseCost?: number;
   warrantyExpiry?: Date;
   notes?: string;
+  processor?: string;
+  ramSize?: string;
+  ramType?: string;
+  storageSize?: string;
+  storageType?: string;
+  gpu?: string;
+  displaySize?: string;
+  displayRes?: string;
+  os?: string;
+  macAddress?: string;
+  ipAddress?: string;
 }) {
   const prefix = appConfig.assetTagPrefixes[data.type] ?? "AST";
   const year = new Date().getFullYear();

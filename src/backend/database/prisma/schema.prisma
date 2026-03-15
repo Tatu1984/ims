@@ -116,6 +116,20 @@ model Asset {
   purchaseCost   Decimal?    @db.Decimal(10, 2)
   warrantyExpiry DateTime?
   notes          String?
+
+  // Hardware specifications
+  processor      String?
+  ramSize        String?
+  ramType        String?
+  storageSize    String?
+  storageType    String?
+  gpu            String?
+  displaySize    String?
+  displayRes     String?
+  os             String?
+  macAddress     String?
+  ipAddress      String?
+
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
 

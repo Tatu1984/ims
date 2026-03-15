@@ -166,6 +166,18 @@ export default function AssetsPage() {
   const [newPurchaseCost, setNewPurchaseCost] = useState("");
   const [newWarrantyExpiry, setNewWarrantyExpiry] = useState("");
   const [newNotes, setNewNotes] = useState("");
+  // Hardware specs
+  const [newProcessor, setNewProcessor] = useState("");
+  const [newRamSize, setNewRamSize] = useState("");
+  const [newRamType, setNewRamType] = useState("");
+  const [newStorageSize, setNewStorageSize] = useState("");
+  const [newStorageType, setNewStorageType] = useState("");
+  const [newGpu, setNewGpu] = useState("");
+  const [newDisplaySize, setNewDisplaySize] = useState("");
+  const [newDisplayRes, setNewDisplayRes] = useState("");
+  const [newOs, setNewOs] = useState("");
+  const [newMacAddress, setNewMacAddress] = useState("");
+  const [newIpAddress, setNewIpAddress] = useState("");
 
   // Edit Asset dialog
   const [editOpen, setEditOpen] = useState(false);
@@ -201,6 +213,17 @@ export default function AssetsPage() {
         purchaseCost: newPurchaseCost ? parseFloat(newPurchaseCost) : undefined,
         warrantyExpiry: newWarrantyExpiry || undefined,
         notes: newNotes.trim() || undefined,
+        processor: newProcessor.trim() || undefined,
+        ramSize: newRamSize.trim() || undefined,
+        ramType: newRamType.trim() || undefined,
+        storageSize: newStorageSize.trim() || undefined,
+        storageType: newStorageType.trim() || undefined,
+        gpu: newGpu.trim() || undefined,
+        displaySize: newDisplaySize.trim() || undefined,
+        displayRes: newDisplayRes.trim() || undefined,
+        os: newOs.trim() || undefined,
+        macAddress: newMacAddress.trim() || undefined,
+        ipAddress: newIpAddress.trim() || undefined,
       });
       setAddDialogOpen(false);
       setNewName("");
@@ -213,6 +236,17 @@ export default function AssetsPage() {
       setNewPurchaseCost("");
       setNewWarrantyExpiry("");
       setNewNotes("");
+      setNewProcessor("");
+      setNewRamSize("");
+      setNewRamType("");
+      setNewStorageSize("");
+      setNewStorageType("");
+      setNewGpu("");
+      setNewDisplaySize("");
+      setNewDisplayRes("");
+      setNewOs("");
+      setNewMacAddress("");
+      setNewIpAddress("");
       await refetch();
     } catch {
       // Error handling could be enhanced with toast notifications
@@ -454,6 +488,120 @@ export default function AssetsPage() {
                     />
                   </div>
                 </div>
+                {/* Hardware Specifications Section */}
+                <div className="border-t border-zinc-800 pt-4 mt-1">
+                  <p className="text-sm font-medium text-zinc-300 mb-3">Hardware Specifications</p>
+                  <div className="grid gap-4">
+                    <div className="grid gap-2">
+                      <Label className="text-zinc-300">Processor (CPU)</Label>
+                      <Input
+                        placeholder="e.g. Intel Core i7-13700H"
+                        value={newProcessor}
+                        onChange={(e) => setNewProcessor(e.target.value)}
+                        className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <Label className="text-zinc-300">RAM Size</Label>
+                        <Input
+                          placeholder="e.g. 32 GB"
+                          value={newRamSize}
+                          onChange={(e) => setNewRamSize(e.target.value)}
+                          className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label className="text-zinc-300">RAM Type</Label>
+                        <Input
+                          placeholder="e.g. DDR5-5600"
+                          value={newRamType}
+                          onChange={(e) => setNewRamType(e.target.value)}
+                          className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <Label className="text-zinc-300">Storage Size</Label>
+                        <Input
+                          placeholder="e.g. 1 TB"
+                          value={newStorageSize}
+                          onChange={(e) => setNewStorageSize(e.target.value)}
+                          className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label className="text-zinc-300">Storage Type</Label>
+                        <Input
+                          placeholder="e.g. NVMe SSD"
+                          value={newStorageType}
+                          onChange={(e) => setNewStorageType(e.target.value)}
+                          className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label className="text-zinc-300">Graphics (GPU)</Label>
+                      <Input
+                        placeholder="e.g. NVIDIA RTX 4060"
+                        value={newGpu}
+                        onChange={(e) => setNewGpu(e.target.value)}
+                        className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <Label className="text-zinc-300">Display Size</Label>
+                        <Input
+                          placeholder='e.g. 14.0" FHD+'
+                          value={newDisplaySize}
+                          onChange={(e) => setNewDisplaySize(e.target.value)}
+                          className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label className="text-zinc-300">Display Resolution</Label>
+                        <Input
+                          placeholder="e.g. 1920x1200"
+                          value={newDisplayRes}
+                          onChange={(e) => setNewDisplayRes(e.target.value)}
+                          className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label className="text-zinc-300">Operating System</Label>
+                      <Input
+                        placeholder="e.g. Windows 11 Pro"
+                        value={newOs}
+                        onChange={(e) => setNewOs(e.target.value)}
+                        className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <Label className="text-zinc-300">MAC Address</Label>
+                        <Input
+                          placeholder="e.g. 00:1A:2B:3C:4D:5E"
+                          value={newMacAddress}
+                          onChange={(e) => setNewMacAddress(e.target.value)}
+                          className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label className="text-zinc-300">IP Address</Label>
+                        <Input
+                          placeholder="e.g. 192.168.1.100"
+                          value={newIpAddress}
+                          onChange={(e) => setNewIpAddress(e.target.value)}
+                          className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="grid gap-2">
                   <Label className="text-zinc-300">Notes</Label>
                   <Textarea
