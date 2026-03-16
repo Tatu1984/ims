@@ -11,7 +11,16 @@ export default function DashboardError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error(error);
+    const errorData = {
+      type: "client_error",
+      boundary: "dashboard",
+      name: error.name,
+      message: error.message,
+      digest: error.digest,
+      url: typeof window !== "undefined" ? window.location.href : undefined,
+      timestamp: new Date().toISOString(),
+    };
+    console.error("[ErrorBoundary:Dashboard]", JSON.stringify(errorData));
   }, [error]);
 
   return (
@@ -22,6 +31,11 @@ export default function DashboardError({
       <p className="text-sm text-zinc-400 max-w-md text-center">
         An error occurred while loading this page. Please try again.
       </p>
+      {error.digest && (
+        <p className="text-xs text-zinc-600 font-mono">
+          Error ID: {error.digest}
+        </p>
+      )}
       <Button onClick={reset}>Try again</Button>
     </div>
   );

@@ -3,8 +3,9 @@ import * as settingsService from "@/backend/services/settings.service";
 import { updateSettingSchema } from "@/backend/validators/settings.validator";
 import { success } from "@/backend/utils/api-response.util";
 import { handleApiError } from "@/backend/utils/error-handler.util";
+import { withGuards, RATE_LIMITS } from "@/backend/utils/api-handler.util";
 
-export async function GET(request: NextRequest) {
+export const GET = withGuards(async (request: NextRequest) => {
   try {
     const category = request.nextUrl.searchParams.get("category") || undefined;
     const result = await settingsService.getAll(category);
@@ -12,9 +13,9 @@ export async function GET(request: NextRequest) {
   } catch (err) {
     return handleApiError(err);
   }
-}
+}, { rateLimit: RATE_LIMITS.read });
 
-export async function PATCH(request: NextRequest) {
+export const PATCH = withGuards(async (request: NextRequest) => {
   try {
     const body = await request.json();
     const parsed = updateSettingSchema.safeParse(body);
@@ -30,4 +31,4 @@ export async function PATCH(request: NextRequest) {
   } catch (err) {
     return handleApiError(err);
   }
-}
+}, { rateLimit: RATE_LIMITS.write });

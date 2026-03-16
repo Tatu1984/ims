@@ -44,6 +44,7 @@ import {
   getUsers,
   createUser,
   updateUser,
+  resetUserPassword,
 } from "@/frontend/api/endpoints/users.api";
 
 type Role = "Admin" | "Technician" | "Auditor" | "Manager";
@@ -103,8 +104,11 @@ export default function UsersPage() {
 
   // Reset Password dialog
   const [resetOpen, setResetOpen] = useState(false);
+  const [resetUserId, setResetUserId] = useState("");
   const [resetUserName, setResetUserName] = useState("");
   const [resetUserEmail, setResetUserEmail] = useState("");
+  const [resetNewPassword, setResetNewPassword] = useState("");
+  const [resetSuccess, setResetSuccess] = useState(false);
 
   // Deactivate dialog
   const [deactivateOpen, setDeactivateOpen] = useState(false);
@@ -161,14 +165,25 @@ export default function UsersPage() {
   }
 
   function handleResetPassword(user: ApiUser) {
+    setResetUserId(user.id);
     setResetUserName(user.name);
     setResetUserEmail(user.email);
+    setResetNewPassword("");
+    setResetSuccess(false);
     setResetOpen(true);
   }
 
-  function confirmResetPassword() {
-    // No email system yet - just show success by closing dialog
-    setResetOpen(false);
+  async function confirmResetPassword() {
+    if (!resetNewPassword.trim() || resetNewPassword.length < 6) return;
+    setSubmitting(true);
+    try {
+      await resetUserPassword(resetUserId, resetNewPassword);
+      setResetSuccess(true);
+    } catch {
+      // error
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function handleDeactivate(user: ApiUser) {
@@ -447,15 +462,39 @@ export default function UsersPage() {
           <DialogHeader>
             <DialogTitle className="text-zinc-100">Reset Password</DialogTitle>
             <DialogDescription className="text-zinc-400">
-              Send a password reset link to <span className="font-medium text-zinc-200">{resetUserName}</span> ({resetUserEmail}).
+              Set a new password for <span className="font-medium text-zinc-200">{resetUserName}</span> ({resetUserEmail}).
             </DialogDescription>
           </DialogHeader>
-          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-300">
-            The user will receive an email with instructions to set a new password. Their current password will remain valid until they complete the reset.
-          </div>
+          {resetSuccess ? (
+            <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-3 text-sm text-green-300">
+              Password has been reset successfully. Please share the new password with the user securely.
+            </div>
+          ) : (
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label className="text-zinc-300">New Password</Label>
+                <Input
+                  type="text"
+                  placeholder="Minimum 6 characters"
+                  value={resetNewPassword}
+                  onChange={(e) => setResetNewPassword(e.target.value)}
+                  className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
+                />
+              </div>
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-300">
+                This will immediately change the user&apos;s password. Their current password will stop working.
+              </div>
+            </div>
+          )}
           <DialogFooter className="bg-zinc-900/50 border-zinc-800">
-            <Button variant="outline" onClick={() => setResetOpen(false)} className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">Cancel</Button>
-            <Button onClick={confirmResetPassword}>Send Reset Link</Button>
+            <Button variant="outline" onClick={() => setResetOpen(false)} className="border-zinc-700 text-zinc-300 hover:bg-zinc-800">
+              {resetSuccess ? "Close" : "Cancel"}
+            </Button>
+            {!resetSuccess && (
+              <Button onClick={confirmResetPassword} disabled={submitting || resetNewPassword.length < 6}>
+                {submitting ? "Resetting..." : "Reset Password"}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

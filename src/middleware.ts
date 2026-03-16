@@ -36,6 +36,10 @@ export async function middleware(request: NextRequest) {
       maxAge: 0,
       path: "/",
     });
+    response.cookies.set(appConfig.auth.refreshCookieName, "", {
+      maxAge: 0,
+      path: "/",
+    });
     return response;
   }
 

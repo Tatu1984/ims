@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as userService from "@/backend/services/user.service";
-import { updateUserSchema } from "@/backend/validators/user.validator";
+import { updateUserSchema, resetPasswordSchema } from "@/backend/validators/user.validator";
 import { success } from "@/backend/utils/api-response.util";
 import { handleApiError } from "@/backend/utils/error-handler.util";
+import { withGuards, RATE_LIMITS } from "@/backend/utils/api-handler.util";
 
-export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const GET = withGuards(async (_: NextRequest, { params }) => {
   try {
     const { id } = await params;
     const user = await userService.getById(id);
@@ -12,9 +13,9 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
   } catch (err) {
     return handleApiError(err);
   }
-}
+}, { rateLimit: RATE_LIMITS.read });
 
-export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const PATCH = withGuards(async (request: NextRequest, { params }) => {
   try {
     const { id } = await params;
     const body = await request.json();
@@ -30,9 +31,28 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   } catch (err) {
     return handleApiError(err);
   }
-}
+}, { rateLimit: RATE_LIMITS.write });
 
-export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+// PUT = Reset Password (Admin only)
+export const PUT = withGuards(async (request: NextRequest, { params }) => {
+  try {
+    const { id } = await params;
+    const body = await request.json();
+    const parsed = resetPasswordSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { success: false, error: "Validation failed", errors: parsed.error.flatten().fieldErrors },
+        { status: 400 }
+      );
+    }
+    await userService.resetPassword(id, parsed.data.newPassword);
+    return success({ message: "Password reset successfully" });
+  } catch (err) {
+    return handleApiError(err);
+  }
+}, { rateLimit: RATE_LIMITS.write });
+
+export const DELETE = withGuards(async (_: NextRequest, { params }) => {
   try {
     const { id } = await params;
     await userService.remove(id);
@@ -40,4 +60,4 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
   } catch (err) {
     return handleApiError(err);
   }
-}
+}, { rateLimit: RATE_LIMITS.delete });

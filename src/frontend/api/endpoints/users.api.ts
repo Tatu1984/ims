@@ -24,6 +24,13 @@ export function updateUser(id: string, data: Record<string, unknown>) {
   });
 }
 
+export function resetUserPassword(id: string, newPassword: string) {
+  return apiClient(`${API_ROUTES.USERS}/${id}`, {
+    method: "PUT",
+    body: JSON.stringify({ newPassword }),
+  });
+}
+
 export function deleteUser(id: string) {
   return apiClient(`${API_ROUTES.USERS}/${id}`, { method: "DELETE" });
 }

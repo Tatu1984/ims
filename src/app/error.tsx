@@ -11,7 +11,17 @@ export default function GlobalError({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error(error);
+    // Structured client-side error reporting
+    const errorData = {
+      type: "client_error",
+      name: error.name,
+      message: error.message,
+      digest: error.digest,
+      stack: error.stack,
+      url: typeof window !== "undefined" ? window.location.href : undefined,
+      timestamp: new Date().toISOString(),
+    };
+    console.error("[ErrorBoundary:Global]", JSON.stringify(errorData));
   }, [error]);
 
   return (
@@ -22,6 +32,11 @@ export default function GlobalError({
       <p className="text-sm text-zinc-400">
         An unexpected error occurred. Please try again.
       </p>
+      {error.digest && (
+        <p className="text-xs text-zinc-600 font-mono">
+          Error ID: {error.digest}
+        </p>
+      )}
       <Button onClick={reset}>Try again</Button>
     </div>
   );

@@ -14,3 +14,7 @@ export const updateUserSchema = z.object({
   department: z.string().optional(),
   status: z.enum(["Active", "Inactive"]).optional(),
 });
+
+export const resetPasswordSchema = z.object({
+  newPassword: z.string().min(6, "Password must be at least 6 characters"),
+});

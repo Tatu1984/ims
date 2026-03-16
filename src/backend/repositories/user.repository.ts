@@ -67,6 +67,7 @@ export async function update(
     department?: string;
     initials?: string;
     status?: "Active" | "Inactive";
+    passwordHash?: string;
   }
 ) {
   return prisma.user.update({ where: { id }, data });

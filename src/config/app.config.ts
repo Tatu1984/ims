@@ -15,5 +15,6 @@ export const appConfig = {
   auth: {
     saltRounds: 12,
     cookieName: "ims-token",
+    refreshCookieName: "ims-refresh",
   },
 } as const;

@@ -2,8 +2,9 @@ import { NextRequest } from "next/server";
 import * as reportService from "@/backend/services/report.service";
 import { success } from "@/backend/utils/api-response.util";
 import { handleApiError } from "@/backend/utils/error-handler.util";
+import { withGuards, RATE_LIMITS } from "@/backend/utils/api-handler.util";
 
-export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const GET = withGuards(async (_: NextRequest, { params }) => {
   try {
     const { id } = await params;
     const report = await reportService.getById(id);
@@ -11,9 +12,9 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
   } catch (err) {
     return handleApiError(err);
   }
-}
+}, { rateLimit: RATE_LIMITS.read });
 
-export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const DELETE = withGuards(async (_: NextRequest, { params }) => {
   try {
     const { id } = await params;
     await reportService.remove(id);
@@ -21,4 +22,4 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
   } catch (err) {
     return handleApiError(err);
   }
-}
+}, { rateLimit: RATE_LIMITS.delete });

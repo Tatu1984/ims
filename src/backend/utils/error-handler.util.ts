@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { logger } from "@/backend/utils/logger.util";
 
 export class AppError extends Error {
   constructor(
@@ -13,6 +14,12 @@ export class AppError extends Error {
 
 export function handleApiError(error: unknown): NextResponse {
   if (error instanceof AppError) {
+    if (error.statusCode >= 500) {
+      logger.error("Application error", {
+        statusCode: error.statusCode,
+        message: error.message,
+      });
+    }
     return NextResponse.json(
       {
         success: false,
@@ -23,7 +30,11 @@ export function handleApiError(error: unknown): NextResponse {
     );
   }
 
-  console.error("Unhandled error:", error);
+  logger.error("Unhandled error", {
+    error: error instanceof Error ? error.message : String(error),
+    stack: error instanceof Error ? error.stack : undefined,
+  });
+
   return NextResponse.json(
     { success: false, error: "An unexpected error occurred" },
     { status: 500 }

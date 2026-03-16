@@ -1,8 +1,9 @@
 import { prisma } from "@/backend/database/client";
 import { success } from "@/backend/utils/api-response.util";
 import { handleApiError } from "@/backend/utils/error-handler.util";
+import { withGuards, RATE_LIMITS } from "@/backend/utils/api-handler.util";
 
-export async function GET() {
+export const GET = withGuards(async () => {
   try {
     const [
       totalAssets,
@@ -64,4 +65,4 @@ export async function GET() {
   } catch (err) {
     return handleApiError(err);
   }
-}
+}, { rateLimit: RATE_LIMITS.read });

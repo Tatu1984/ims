@@ -3,8 +3,9 @@ import * as userService from "@/backend/services/user.service";
 import { createUserSchema } from "@/backend/validators/user.validator";
 import { success } from "@/backend/utils/api-response.util";
 import { handleApiError } from "@/backend/utils/error-handler.util";
+import { withGuards, RATE_LIMITS } from "@/backend/utils/api-handler.util";
 
-export async function GET(request: NextRequest) {
+export const GET = withGuards(async (request: NextRequest) => {
   try {
     const params = request.nextUrl.searchParams;
     const result = await userService.getAll({
@@ -16,9 +17,9 @@ export async function GET(request: NextRequest) {
   } catch (err) {
     return handleApiError(err);
   }
-}
+}, { rateLimit: RATE_LIMITS.read });
 
-export async function POST(request: NextRequest) {
+export const POST = withGuards(async (request: NextRequest) => {
   try {
     const body = await request.json();
     const parsed = createUserSchema.safeParse(body);
@@ -33,4 +34,4 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     return handleApiError(err);
   }
-}
+}, { rateLimit: RATE_LIMITS.write });

@@ -1,11 +1,44 @@
 import { NextRequest, NextResponse } from "next/server";
-import { login } from "@/backend/services/auth.service";
+import { login, refreshSession } from "@/backend/services/auth.service";
 import { loginSchema } from "@/backend/validators/auth.validator";
-import { verifyToken } from "@/backend/utils/jwt.util";
+import { verifyToken, verifyRefreshToken } from "@/backend/utils/jwt.util";
 import { handleApiError } from "@/backend/utils/error-handler.util";
 import { checkRateLimit } from "@/backend/utils/rate-limit.util";
 import { success, error } from "@/backend/utils/api-response.util";
 import { appConfig } from "@/config/app.config";
+
+const COOKIE_OPTS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "strict" as const,
+  path: "/",
+};
+
+function setAuthCookies(
+  response: NextResponse,
+  token: string,
+  refreshToken: string
+) {
+  response.cookies.set(appConfig.auth.cookieName, token, {
+    ...COOKIE_OPTS,
+    maxAge: 60 * 60, // 1 hour
+  });
+  response.cookies.set(appConfig.auth.refreshCookieName, refreshToken, {
+    ...COOKIE_OPTS,
+    maxAge: 7 * 24 * 60 * 60, // 7 days
+  });
+}
+
+function clearAuthCookies(response: NextResponse) {
+  response.cookies.set(appConfig.auth.cookieName, "", {
+    ...COOKIE_OPTS,
+    maxAge: 0,
+  });
+  response.cookies.set(appConfig.auth.refreshCookieName, "", {
+    ...COOKIE_OPTS,
+    maxAge: 0,
+  });
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -32,13 +65,7 @@ export async function POST(request: NextRequest) {
     const result = await login(parsed.data.email, parsed.data.password);
 
     const response = success(result, 200);
-    response.cookies.set(appConfig.auth.cookieName, result.token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 7 * 24 * 60 * 60, // 7 days
-    });
+    setAuthCookies(response, result.token, result.refreshToken);
 
     return response;
   } catch (err) {
@@ -69,14 +96,37 @@ export async function GET(request: NextRequest) {
   }
 }
 
+export async function PUT(request: NextRequest) {
+  try {
+    const ip = request.headers.get("x-forwarded-for") || "unknown";
+    const { allowed } = checkRateLimit(`refresh:${ip}`, 30, 15 * 60 * 1000);
+    if (!allowed) {
+      return error("Too many refresh attempts.", 429);
+    }
+
+    const refreshCookie = request.cookies.get(appConfig.auth.refreshCookieName)?.value;
+    if (!refreshCookie) {
+      return error("No refresh token", 401);
+    }
+
+    const payload = await verifyRefreshToken(refreshCookie);
+    if (!payload) {
+      return error("Invalid refresh token", 401);
+    }
+
+    const result = await refreshSession(payload.id);
+
+    const response = success({ user: result.user });
+    setAuthCookies(response, result.token, result.refreshToken);
+
+    return response;
+  } catch (err) {
+    return handleApiError(err);
+  }
+}
+
 export async function DELETE() {
   const response = success({ message: "Logged out" });
-  response.cookies.set(appConfig.auth.cookieName, "", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: 0,
-  });
+  clearAuthCookies(response);
   return response;
 }

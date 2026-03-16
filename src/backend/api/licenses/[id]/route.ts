@@ -3,8 +3,9 @@ import * as licenseService from "@/backend/services/license.service";
 import { updateLicenseSchema } from "@/backend/validators/license.validator";
 import { success } from "@/backend/utils/api-response.util";
 import { handleApiError } from "@/backend/utils/error-handler.util";
+import { withGuards, RATE_LIMITS } from "@/backend/utils/api-handler.util";
 
-export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const GET = withGuards(async (_: NextRequest, { params }) => {
   try {
     const { id } = await params;
     const license = await licenseService.getById(id);
@@ -12,9 +13,9 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
   } catch (err) {
     return handleApiError(err);
   }
-}
+}, { rateLimit: RATE_LIMITS.read });
 
-export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const PATCH = withGuards(async (request: NextRequest, { params }) => {
   try {
     const { id } = await params;
     const body = await request.json();
@@ -30,9 +31,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   } catch (err) {
     return handleApiError(err);
   }
-}
+}, { rateLimit: RATE_LIMITS.write });
 
-export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const DELETE = withGuards(async (_: NextRequest, { params }) => {
   try {
     const { id } = await params;
     await licenseService.remove(id);
@@ -40,4 +41,4 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
   } catch (err) {
     return handleApiError(err);
   }
-}
+}, { rateLimit: RATE_LIMITS.delete });

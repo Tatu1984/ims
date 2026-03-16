@@ -1,6 +1,6 @@
-import { findByEmail, updateLastLogin } from "@/backend/repositories/user.repository";
+import { findByEmail, findById, updateLastLogin } from "@/backend/repositories/user.repository";
 import { comparePassword } from "@/backend/utils/hash.util";
-import { signToken } from "@/backend/utils/jwt.util";
+import { signToken, signRefreshToken } from "@/backend/utils/jwt.util";
 import { AppError } from "@/backend/utils/error-handler.util";
 
 export async function login(email: string, password: string) {
@@ -20,15 +20,21 @@ export async function login(email: string, password: string) {
 
   await updateLastLogin(user.id);
 
-  const token = await signToken({
+  const payload = {
     id: user.id,
     email: user.email,
     name: user.name,
     role: user.role,
-  });
+  };
+
+  const [token, refreshToken] = await Promise.all([
+    signToken(payload),
+    signRefreshToken(payload),
+  ]);
 
   return {
     token,
+    refreshToken,
     user: {
       id: user.id,
       name: user.name,
@@ -38,4 +44,25 @@ export async function login(email: string, password: string) {
       initials: user.initials,
     },
   };
+}
+
+export async function refreshSession(userId: string) {
+  const user = await findById(userId);
+  if (!user || user.status === "Inactive") {
+    throw new AppError(401, "Invalid refresh token");
+  }
+
+  const payload = {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+  };
+
+  const [token, refreshToken] = await Promise.all([
+    signToken(payload),
+    signRefreshToken(payload),
+  ]);
+
+  return { token, refreshToken, user: payload };
 }

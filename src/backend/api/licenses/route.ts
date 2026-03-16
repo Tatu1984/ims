@@ -3,17 +3,18 @@ import * as licenseService from "@/backend/services/license.service";
 import { createLicenseSchema } from "@/backend/validators/license.validator";
 import { success } from "@/backend/utils/api-response.util";
 import { handleApiError } from "@/backend/utils/error-handler.util";
+import { withGuards, RATE_LIMITS } from "@/backend/utils/api-handler.util";
 
-export async function GET() {
+export const GET = withGuards(async () => {
   try {
     const result = await licenseService.getAll();
     return success(result);
   } catch (err) {
     return handleApiError(err);
   }
-}
+}, { rateLimit: RATE_LIMITS.read });
 
-export async function POST(request: NextRequest) {
+export const POST = withGuards(async (request: NextRequest) => {
   try {
     const body = await request.json();
     const parsed = createLicenseSchema.safeParse(body);
@@ -33,4 +34,4 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     return handleApiError(err);
   }
-}
+}, { rateLimit: RATE_LIMITS.write });

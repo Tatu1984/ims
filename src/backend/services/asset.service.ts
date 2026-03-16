@@ -1,3 +1,4 @@
+import { prisma } from "@/backend/database/client";
 import * as repo from "@/backend/repositories/asset.repository";
 import { AppError } from "@/backend/utils/error-handler.util";
 import { appConfig } from "@/config/app.config";
@@ -38,13 +39,20 @@ export async function create(data: {
   macAddress?: string;
   ipAddress?: string;
 }) {
-  const prefix = appConfig.assetTagPrefixes[data.type] ?? "AST";
-  const year = new Date().getFullYear();
-  const count = await repo.countByType(data.type);
-  const seq = String(count + 1).padStart(4, "0");
-  const assetTag = `${prefix}-${year}-${seq}`;
+  // Use transaction to ensure asset tag generation is atomic
+  return prisma.$transaction(async (tx) => {
+    const prefix = appConfig.assetTagPrefixes[data.type] ?? "AST";
+    const year = new Date().getFullYear();
+    const count = await tx.asset.count({
+      where: { type: data.type as Prisma.EnumAssetTypeFilter },
+    });
+    const seq = String(count + 1).padStart(4, "0");
+    const assetTag = `${prefix}-${year}-${seq}`;
 
-  return repo.create({ ...data, assetTag } as Prisma.AssetCreateInput);
+    return tx.asset.create({
+      data: { ...data, assetTag } as Prisma.AssetCreateInput,
+    });
+  });
 }
 
 export async function update(id: string, data: Parameters<typeof repo.update>[1]) {

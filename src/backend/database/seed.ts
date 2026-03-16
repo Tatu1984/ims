@@ -11,6 +11,11 @@ async function hashPassword(password: string): Promise<string> {
 }
 
 async function main() {
+  if (process.env.NODE_ENV === "production") {
+    console.error("ERROR: Cannot run seed in production. Set NODE_ENV=development to seed.");
+    process.exit(1);
+  }
+
   const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
   const prisma = new PrismaClient({ adapter });
 
