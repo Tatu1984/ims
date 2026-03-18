@@ -1,21 +1,20 @@
 "use client";
 
 import { useCallback } from "react";
-import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/frontend/store/auth.store";
 import { loginApi, logoutApi, getMeApi } from "@/frontend/api/endpoints/auth.api";
 
 export function useAuth() {
-  const router = useRouter();
   const { user, isAuthenticated, isLoading, setUser, setLoading, logout: clearAuth } = useAuthStore();
 
   const login = useCallback(
     async (email: string, password: string) => {
       const res = await loginApi(email, password);
       setUser(res.data.user);
-      router.push("/");
+      // Full page navigation ensures cookies are sent fresh (no stale router cache)
+      window.location.href = "/";
     },
-    [setUser, router]
+    [setUser]
   );
 
   const logout = useCallback(async () => {
